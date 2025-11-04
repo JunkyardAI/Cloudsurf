@@ -73,14 +73,13 @@
     
     <!-- Header -->
     <header class="flex items-center gap-3 p-4 border-b border-gray-800 select-none flex-shrink-0">
+      <!-- Icon -->
+      <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-layers"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+      </div>
       <div>
         <h1 class="text-base font-semibold">Cloudstax</h1>
         <p class="text-xs text-gray-400">Your quick-access bookmark stacks</p>
-      </div>
-      <!-- User ID Display -->
-      <div class="ml-auto text-right">
-         <span class="text-xs text-gray-500">User ID:</span>
-         <p id="userIdDisplay" class="text-xs text-gray-400 font-mono" title="Your unique User ID">loading...</p>
       </div>
     </header>
 
@@ -167,32 +166,15 @@
 
   <!-- Firebase and App Logic -->
   <script type="module">
-    // Import Firebase modules
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { 
-      getAuth, 
-      signInAnonymously, 
-      signInWithCustomToken, 
-      onAuthStateChanged 
-    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { 
-      getFirestore, 
-      doc, 
-      addDoc, 
-      updateDoc, 
-      deleteDoc, 
-      onSnapshot, 
-      collection, 
-      query,
-      writeBatch,
-      setLogLevel
-    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    // --- IndexedDB Configuration ---
+    const DB_NAME = 'cloudstax_db';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'bookmarks';
 
     // --- Global State ---
-    let db, auth, userId, appId;
+    let db; // IndexedDB instance
     let allBookmarks = []; // Local cache of all bookmarks
     let selectedBookmarks = new Set(); // Set of bookmark IDs for multi-select
-    let unsubscribeBookmarks = null; // To stop the listener
     
     // --- DOM Elements ---
     const $ = document.getElementById.bind(document);
@@ -205,7 +187,7 @@
       stackFilter: $('stackFilter'),
       bookmarksList: $('bookmarksList'),
       loadingIndicator: $('loadingIndicator'),
-      userIdDisplay: $('userIdDisplay'),
+      userIdDisplay: $('userIdDisplay'), // This element no longer exists, but we'll leave the ref just in case to avoid script errors if not all HTML is updated.
       modal: $('modal'),
       modalTitle: $('modalTitle'),
       modalBody: $('modalBody'),
@@ -328,6 +310,136 @@
     
     elements.modalClose.addEventListener('click', hideModal);
 
+    // --- IndexedDB Functions ---
+
+    /**
+     * Initializes the IndexedDB database.
+     */
+    function initDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+          }
+        };
+
+        request.onsuccess = (event) => {
+          db = event.target.result;
+          console.log("Database initialized successfully");
+          resolve(db);
+        };
+
+        request.onerror = (event) => {
+          console.error("IndexedDB error:", event.target.error);
+          elements.loadingIndicator.textContent = "Error: Could not open local database.";
+          reject(event.target.error);
+        };
+      });
+    }
+
+    /**
+     * Helper to get an object store.
+     * @param {string} mode - 'readonly' or 'readwrite'
+     */
+    function getObjectStore(mode) {
+      const transaction = db.transaction([STORE_NAME], mode);
+      return transaction.objectStore(STORE_NAME);
+    }
+
+    /**
+     * Fetches all bookmarks from IndexedDB.
+     */
+    function getAllBookmarksFromDB() {
+      return new Promise((resolve, reject) => {
+        const store = getObjectStore('readonly');
+        const request = store.getAll();
+
+        request.onsuccess = (event) => {
+          resolve(event.target.result);
+        };
+
+        request.onerror = (event) => {
+          console.error("Error fetching bookmarks:", event.target.error);
+          reject(event.target.error);
+        };
+      });
+    }
+
+    /**
+     * Adds a single bookmark to IndexedDB.
+     * @param {object} bookmark - The bookmark object to add.
+     */
+    function addBookmarkToDB(bookmark) {
+      return new Promise((resolve, reject) => {
+        const store = getObjectStore('readwrite');
+        const request = store.add(bookmark);
+
+        request.onsuccess = resolve;
+        request.onerror = reject;
+      });
+    }
+
+    /**
+     * Updates a single bookmark in IndexedDB.
+     * @param {object} bookmark - The bookmark object to update.
+     */
+    function updateBookmarkInDB(bookmark) {
+      return new Promise((resolve, reject) => {
+        const store = getObjectStore('readwrite');
+        const request = store.put(bookmark);
+
+        request.onsuccess = resolve;
+        request.onerror = reject;
+      });
+    }
+
+    /**
+     * Deletes a single bookmark from IndexedDB by its ID.
+     * @param {string} id - The ID of the bookmark to delete.
+     */
+    function deleteBookmarkFromDB(id) {
+      return new Promise((resolve, reject) => {
+        const store = getObjectStore('readwrite');
+        const request = store.delete(id);
+
+        request.onsuccess = resolve;
+        request.onerror = reject;
+      });
+    }
+
+    /**
+     * Batch imports an array of bookmarks into IndexedDB.
+     * @param {Array} bookmarks - Array of bookmark objects.
+     */
+    function batchImportToDB(bookmarks) {
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+
+        let importCount = 0;
+        bookmarks.forEach(bookmark => {
+          // Add a UUID if the imported item doesn't have one
+          if (!bookmark.id) {
+            bookmark.id = crypto.randomUUID();
+          }
+          store.add(bookmark);
+          importCount++;
+        });
+
+        transaction.oncomplete = () => {
+          resolve(importCount);
+        };
+
+        transaction.onerror = (event) => {
+          reject(event.target.error);
+        };
+      });
+    }
+
+
     // --- Rendering Functions ---
 
     /**
@@ -370,6 +482,7 @@
         
         item.innerHTML = `
           <input type="checkbox" class="bookmark-checkbox form-checkbox mt-1" data-id="${bookmark.id}" ${isChecked}>
+          <img src="${sanitize(bookmark.icon)}"
                class="w-8 h-8 rounded-md flex-shrink-0" 
                alt=""
                onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239ca3af%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 class=%22lucide lucide-globe%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22/><path d=%22M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20%22/><path d=%22M2 12h20%22/></svg>'">
@@ -461,38 +574,30 @@
       updateMultiSelectFooter();
     }
 
-    // --- Firebase Actions ---
+    // --- Data Logic Functions ---
 
     /**
-     * Sets up the real-time listener for bookmarks.
+     * Loads all bookmarks from DB, updates state, and re-renders.
      */
-    function setupBookmarkListener() {
-      if (unsubscribeBookmarks) unsubscribeBookmarks();
-      if (!db || !userId) return;
-
-      const collectionPath = `artifacts/${appId}/users/${userId}/bookmarks`;
-      const q = query(collection(db, collectionPath));
-      
-      unsubscribeBookmarks = onSnapshot(q, (querySnapshot) => {
-        allBookmarks = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })).sort((a, b) => {
-          const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
-          const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+    async function loadAllBookmarks() {
+      try {
+        allBookmarks = await getAllBookmarksFromDB();
+        allBookmarks.sort((a, b) => {
+          const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
+          const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
           return dateB - dateA; // Sort by newest first
         });
         
         renderStacks();
         renderBookmarks();
-      }, (error) => {
-        console.error("Error listening to bookmarks: ", error);
-        showNotification("Error loading bookmarks.", true);
-      });
+      } catch (error) {
+        console.error("Failed to load bookmarks:", error);
+        showNotification("Could not load bookmarks.", true);
+      }
     }
 
     /**
-     * Adds a new bookmark to Firestore.
+     * Adds a new bookmark.
      */
     async function addBookmark() {
       const rawName = elements.nameIn.value;
@@ -517,24 +622,27 @@
       const icon = getFavicon(normalizedUrl);
       
       const newBookmark = {
+        id: crypto.randomUUID(), // Generate a unique ID
         name,
         url: normalizedUrl,
         stack,
         icon,
-        createdAt: new Date()
+        createdAt: new Date().toISOString() // Store as ISO string
       };
       
       elements.addBtn.disabled = true;
       elements.addBtn.textContent = 'Adding...';
 
       try {
-        const collectionPath = `artifacts/${appId}/users/${userId}/bookmarks`;
-        await addDoc(collection(db, collectionPath), newBookmark);
-        
+        await addBookmarkToDB(newBookmark);
         showNotification("Bookmark added!");
+        
+        // Clear inputs
         elements.nameIn.value = '';
         elements.urlIn.value = '';
         elements.stackIn.value = '';
+
+        await loadAllBookmarks(); // Reload and re-render
       } catch (error) {
         console.error("Error adding document: ", error);
         showNotification("Failed to add bookmark.", true);
@@ -561,11 +669,12 @@
       $('cancelDelete').addEventListener('click', hideModal);
       $('confirmDelete').addEventListener('click', async () => {
         try {
-          const docPath = `artifacts/${appId}/users/${userId}/bookmarks/${id}`;
-          await deleteDoc(doc(db, docPath));
+          await deleteBookmarkFromDB(id);
           selectedBookmarks.delete(id); // Remove from selection if it was selected
           updateMultiSelectFooter();
           showNotification("Bookmark deleted.");
+          
+          await loadAllBookmarks(); // Reload and re-render
         } catch (error) {
           console.error("Error deleting document: ", error);
           showNotification("Failed to delete bookmark.", true);
@@ -627,6 +736,7 @@
       const icon = getFavicon(normalizedUrl);
       
       const updatedData = {
+        ...bookmark, // Preserve ID and createdAt
         name,
         url: normalizedUrl,
         stack,
@@ -634,9 +744,9 @@
       };
       
       try {
-        const docPath = `artifacts/${appId}/users/${userId}/bookmarks/${id}`;
-        await updateDoc(doc(db, docPath), updatedData);
+        await updateBookmarkInDB(updatedData);
         showNotification("Bookmark updated!");
+        await loadAllBookmarks(); // Reload and re-render
       } catch (error) {
         console.error("Error updating document: ", error);
         showNotification("Failed to update bookmark.", true);
@@ -720,7 +830,8 @@
               url: normalizeUrl(b.url), // Normalize URL on import
               stack: b.stack || b.category || "General",
               icon: getFavicon(normalizeUrl(b.url)),
-              createdAt: b.createdAt ? new Date(b.createdAt) : new Date()
+              createdAt: b.createdAt ? new Date(b.createdAt).toISOString() : new Date().toISOString(),
+              id: crypto.randomUUID() // Assign a new ID on import
             }));
 
             if (validBookmarks.length === 0) {
@@ -757,17 +868,9 @@
       $('cancelImport').addEventListener('click', hideModal);
       $('confirmImport').addEventListener('click', async () => {
         try {
-          const collectionPath = `artifacts/${appId}/users/${userId}/bookmarks`;
-          const batch = writeBatch(db);
-          
-          bookmarks.forEach(bookmark => {
-            const docRef = doc(collection(db, collectionPath)); // Create a new doc with a generated ID
-            batch.set(docRef, bookmark);
-          });
-          
-          await batch.commit();
-          showNotification(`Successfully imported ${bookmarks.length} bookmarks.`);
-          
+          const importCount = await batchImportToDB(bookmarks);
+          showNotification(`Successfully imported ${importCount} bookmarks.`);
+          await loadAllBookmarks(); // Reload and re-render
         } catch (error) {
           console.error("Error batch writing documents: ", error);
           showNotification("Failed to import bookmarks.", true);
@@ -780,49 +883,20 @@
     // --- Initialization ---
 
     async function initialize() {
-      appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
       try {
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        if (!firebaseConfig.apiKey) {
-            throw new Error("Firebase config is missing or invalid.");
-        }
-        const app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-        auth = getAuth(app);
-        setLogLevel('debug');
+        // 1. Initialize the local database
+        await initDB();
+        
+        // 2. Load all bookmarks from the DB
+        await loadAllBookmarks();
+
       } catch (error) {
-        console.error("Firebase initialization failed:", error);
-        elements.loadingIndicator.textContent = "Error: Could not connect to database.";
+        console.error("Initialization failed:", error);
+        elements.loadingIndicator.textContent = "Error: Application failed to initialize.";
         return;
       }
 
-      onAuthStateChanged(auth, async (user) => {
-        if (user) {
-          userId = user.uid;
-          elements.userIdDisplay.textContent = userId;
-          elements.userIdDisplay.title = `Your unique User ID: ${userId}`;
-          setupBookmarkListener();
-        } else {
-          userId = null;
-          elements.userIdDisplay.textContent = "Authenticating...";
-          if (unsubscribeBookmarks) unsubscribeBookmarks();
-          
-          try {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-              await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-              await signInAnonymously(auth);
-            }
-          } catch (error) {
-            console.error("Authentication failed:", error);
-            elements.loadingIndicator.textContent = "Error: Authentication failed.";
-            elements.userIdDisplay.textContent = "Auth Error";
-          }
-        }
-      });
-
-      // Add DOM Event Listeners
+      // 3. Add DOM Event Listeners
       elements.addBtn.addEventListener('click', addBookmark);
       elements.urlIn.addEventListener('keydown', e => e.key === 'Enter' && addBookmark());
       elements.nameIn.addEventListener('keydown', e => e.key === 'Enter' && addBookmark());
@@ -841,4 +915,5 @@
   </script>
 </body>
 </html>
+
 
