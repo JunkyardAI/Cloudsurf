@@ -1,758 +1,428 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="en" class="h-full antialiased">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Free Bounce — Quick Access (v3)</title>
-<!-- Free Bounce Quick Access v3 (Rebuilt)
- - IndexedDB storage with encryption
- - Search, sortable table, dynamic categories, icons (favicons)
- - Themes (dark/light/auto), bulk actions, CSV import/export
- - Enhanced 3D visual with particles on hover
- - Keyboard shortcuts, accessibility
- - Electron-ready (frameless, draggable, resizable)
--->
-<style>
-:root{
-  --bg:#070809; --card:linear-gradient(180deg,#070809,#050506); --muted:#9aa3b2; --accent:#2a76d2; --line:#1b1d20; --text:#e6eef6;
-  font-size:13px; --theme: dark;
-}
-.light{ --bg:#f0f4f8; --card:linear-gradient(180deg,#ffffff,#f8f9fa); --muted:#6c757d; --accent:#00b4d8; --line:rgba(0,0,0,0.1); --text:#212529; }
-*{box-sizing:border-box;font-family:Inter,Segoe UI,Helvetica,Arial}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--text);overflow:hidden}
-.fb-panel{position:absolute;inset:0;background:var(--card);border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,.03);display:flex;flex-direction:column}
-.fb-header{display:flex;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);gap:6px;-webkit-app-region:drag}
-.hdr-visual{width:48px;height:32px;border-radius:6px;overflow:hidden;cursor:pointer;transition:transform 0.3s}
-.hdr-visual:hover{transform:scale(1.05)}
-.title{font-weight:700;font-size:0.95rem}
-.small{font-size:0.72rem;color:var(--muted)}
-.controls{flex:1;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-left:auto}
-.controls::-webkit-scrollbar{display:none}
-.btn{background:transparent;border:1px solid rgba(255,255,255,.06);color:var(--text);padding:6px 8px;border-radius:8px;font-size:.85rem;white-space:nowrap;cursor:pointer;min-width:fit-content}
-.btn:hover{transform:translateY(-1px);border-color:rgba(255,255,255,.12)}
-.more-btn{position:relative}
-.more-menu{position:absolute;right:0;top:100%;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px;min-width:140px;box-shadow:0 8px 20px rgba(0,0,0,.6);display:none;z-index:100}
-.more-btn:hover .more-menu{display:block}
-.table-wrap{flex:1;overflow:auto;padding:6px}
-.stack-filter{display:flex;gap:6px;align-items:center;margin-bottom:6px}
-.filter-select,.search-in{background:transparent;border:1px solid rgba(255,255,255,.04);padding:6px;border-radius:8px;color:var(--text);font-size:.9rem}
-.table{width:100%;border-collapse:separate;border-spacing:0;font-size:0.9rem}
-thead th{padding:8px 10px;font-size:.7rem;color:var(--muted);text-align:left;border-bottom:1px solid var(--line);cursor:pointer}
-td{padding:8px 10px;line-height:1.4;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-tbody tr:nth-child(odd) td{background:rgba(255,255,255,0.01)}
-tbody tr:nth-child(even) td{background:rgba(255,255,255,0.02)}
-.row-hover{background:linear-gradient(90deg, rgba(42,118,210,0.03), rgba(42,118,210,0.02));transition:background 0.2s}
-.col-icon{width:32px}
-.col-cat{width:26%;text-align:center;color:var(--muted);font-size:.82rem}
-.col-name{width:40%}
-.col-path{width:34%;font-size:.78rem;color:var(--muted)}
-.add-row{display:flex;gap:8px;padding:8px;border-top:1px solid var(--line);align-items:center}
-.input{flex:1;background:transparent;border:1px solid rgba(255,255,255,.04);padding:8px;border-radius:8px;color:var(--text);font-size:.9rem}
-.select{background:transparent;border:1px solid rgba(255,255,255,.04);padding:8px;border-radius:8px;color:var(--text);font-size:.9rem}
-.resizer{position:absolute;right:6px;bottom:6px;width:18px;height:18px;cursor:se-resize;border-radius:4px;opacity:.6;background:rgba(255,255,255,.1)}
-.fullsheet{position:absolute;inset:0;background:var(--card);border-radius:0;z-index:100000;display:flex;flex-direction:column;overflow:hidden;border:none}
-.fs-header{display:flex;align-items:center;padding:12px;border-bottom:1px solid var(--line)}
-.fs-body{flex:1;overflow:auto;padding:12px}
-.fs-footer{padding:10px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
-.ctx-menu{position:fixed;background:var(--card);border:1px solid var(--line);padding:6px;border-radius:8px;z-index:100002;min-width:130px;color:var(--text);box-shadow:0 12px 30px rgba(0,0,0,.6)}
-.ctx-menu div{padding:8px 10px;cursor:pointer;transition:background 0.2s}
-.ctx-menu div:hover{background:rgba(255,255,255,0.02)}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100001;display:flex;align-items:center;justify-content:center}
-.modal-content{background:var(--card);padding:20px;border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.6);width:400px;max-width:90vw}
-.modal form{display:flex;flex-direction:column;gap:10px}
-.modal input, .modal select{padding:8px;border:1px solid var(--line);background:transparent;color:var(--text);border-radius:8px}
-.modal button{padding:8px;border:none;background:var(--accent);color:#fff;border-radius:8px;cursor:pointer}
-.modal button.cancel{background:#e66;color:#fff}
-.fb-panel{font-size:calc(12px + (var(--w,320px) - 220px) * 0.02)}
-.kbd{padding:2px 6px;border-radius:6px;background:rgba(255,255,255,0.03);font-size:.72rem;color:var(--muted)}
-:focus{outline:2px solid var(--accent)}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LENS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/three@0.153.0/build/three.min.js"></script>
+  <style>
+    :root { --accent: #3b82f6; }
+    body { font-family: 'Inter', sans-serif; }
+    .octa { width: 40px; height: 40px; border-radius: 50%; overflow: hidden; cursor: pointer; }
+    .resizer { cursor: se-resize; }
+    .row-hover { @apply bg-blue-500/5 transition-colors; }
+    .ctx-menu { @apply min-w-40; }
+    .ctx-menu div:hover { @apply bg-white/10; }
+    .stack-drop { @apply border-2 border-dashed border-blue-500/50 rounded-lg; }
+  </style>
 </head>
-<body>
+<body class="h-full bg-gray-950 text-gray-100 overflow-hidden">
 
-<div id="panel" class="fb-panel" role="dialog" aria-label="Quick Access">
-  <div class="fb-header">
-    <div class="hdr-visual" id="hdrVisual" title="Toggle FX"></div>
-    <div class="header-left">
-      <div class="title">Free Bounce</div>
-      <div class="small">Quick Access · loadouts · search</div>
+<!-- Main Panel -->
+<div id="panel" class="absolute inset-0 bg-gray-900/90 backdrop-blur-xl rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-800" 
+     style="width: 460px; height: 620px; resize: both; min-width: 380px; min-height: 500px;">
+  
+  <!-- Header -->
+  <header class="flex items-center gap-3 p-4 border-b border-gray-800 select-none" data-drag>
+    <div id="octaContainer" class="octa"></div>
+    <div>
+      <h1 class="text-sm font-semibold">Free Bounce</h1>
+      <p class="text-xs text-gray-400">v5.0 · Offline-First</p>
     </div>
-    <div class="controls" id="controls">
-      <select id="stackSelect" class="select" title="Loadout"></select>
-      <button id="saveStack" class="btn">Save</button>
-      <button id="toggleFX" class="btn">FX</button>
-      <div class="more-btn btn">More
-        <div class="more-menu">
-          <div id="toggleTheme">Theme</div>
-          <div id="encryptToggle">Encrypt</div>
-          <div id="fsExportCsv">Export CSV</div>
-          <div id="fsImportCsv">Import CSV</div>
-          <div id="alwaysOnTopBtn">Always on Top</div>
-        </div>
-      </div>
-      <button id="expandBtn" class="btn">⤢</button>
+    <div class="ml-auto flex gap-1.5">
+      <select id="loadoutSelect" class="text-xs bg-gray-800 text-gray-200 rounded-md px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500"></select>
+      <button id="saveLoadout" class="text-xs px-2.5 py-1.5 bg-green-600 hover:bg-green-500 rounded-md transition font-medium">Save</button>
+      <button id="expandBtn" class="text-xs px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-md transition">Expand</button>
     </div>
+  </header>
+
+  <!-- Tabs -->
+  <div class="flex border-b border-gray-800">
+    <button id="tabBookmarks" class="flex-1 px-4 py-2 text-sm font-medium text-blue-400 border-b-2 border-blue-400">Bookmarks</button>
+    <button id="tabStacks" class="flex-1 px-4 py-2 text-sm font-medium text-gray-400">Stacks</button>
   </div>
 
-  <div class="table-wrap">
-    <div class="stack-filter">
-      <input id="searchIn" class="search-in" placeholder="Search..." />
-      <select id="catFilter" class="filter-select">
-        <option value="">All categories</option>
-      </select>
-      <div class="kbd">Ctrl+` toggle</div>
-    </div>
-    <table class="table" aria-live="polite">
-      <thead><tr><th class="col-icon"></th><th class="col-name" data-sort="name">Name ▲</th><th class="col-cat" data-sort="category">Category ▲</th><th class="col-path" data-sort="path">Path / URL ▲</th></tr></thead>
-      <tbody id="body"></tbody>
+  <!-- Search & Filter -->
+  <div class="flex gap-2 p-3">
+    <input id="searchIn" placeholder="Search..." class="flex-1 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+    <select id="catFilter" class="text-sm bg-gray-800 text-gray-200 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500"></select>
+  </div>
+
+  <!-- Bookmarks View -->
+  <div id="bookmarksView" class="flex-1 overflow-y-auto px-3 pb-2">
+    <table class="w-full text-sm">
+      <thead class="text-xs text-gray-500 border-b border-gray-800 sticky top-0 bg-gray-900/90 backdrop-blur">
+        <tr>
+          <th class="text-left p-2 font-medium cursor-pointer hover:text-gray-300" data-sort="name">Name</th>
+          <th class="text-center p-2 w-20" data-sort="category">Cat</th>
+          <th class="text-left p-2" data-sort="path">Path</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody" class="divide-y divide-gray-800"></tbody>
     </table>
   </div>
 
-  <div class="add-row">
-    <input id="nameIn" class="input" placeholder="Name (eg. Discord)" />
-    <select id="catIn" class="select" title="Category"></select>
-    <input id="pathIn" class="input" placeholder="Paste URL or file path" />
-    <button id="addBtn" class="btn">Add</button>
+  <!-- Stacks View -->
+  <div id="stacksView" class="hidden flex-1 overflow-y-auto p-3 space-y-3">
+    <div id="stackList"></div>
+    <button id="newStack" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-md text-sm">+ New Stack</button>
   </div>
 
-  <div id="resizer" class="resizer" title="Drag to resize" aria-hidden="true"></div>
+  <!-- Add Row -->
+  <div class="flex gap-2 p-3 border-t border-gray-800">
+    <input id="nameIn" placeholder="Name (optional)" class="flex-1 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200">
+    <select id="catIn" class="text-sm bg-gray-800 text-gray-200 rounded-md px-3 py-2"></select>
+    <input id="pathIn" placeholder="google.com" class="flex-1 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200">
+    <button id="addBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">Add</button>
+  </div>
+
+  <!-- Resizer -->
+  <div class="absolute right-1 bottom-1 w-5 h-5 resizer opacity-40 hover:opacity-80">
+    <svg class="w-full h-full text-gray-500" fill="currentColor" viewBox="0 0 16 16">
+      <path d="M5.5 0v5.5H0V0h5.5zM16 10.5V16H10.5v-5.5H16zM5.5 10.5V16H0v-5.5h5.5z"/>
+    </svg>
+  </div>
 </div>
 
-<div id="fullsheet" class="fullsheet" style="display:none">
-  <div class="fs-header">
-    <div style="font-weight:700">Free Bounce — Full Tech Stack</div>
-    <div style="margin-left:12px;color:var(--muted)">Edit, reorder, bulk actions, import/export.</div>
-    <div style="margin-left:auto;display:flex;gap:8px">
-      <button id="fsBulkDel" class="btn" style="color:#e66">Bulk Delete</button>
-      <button id="fsExportCsv" class="btn">Export CSV</button>
-      <button id="fsClose" class="btn">Close</button>
+<!-- Context Menu -->
+<div id="ctxMenu" class="ctx-menu hidden fixed bg-gray-800 border border-gray-700 rounded-lg shadow-2xl py-1 z-50 text-sm"></div>
+
+<!-- Full Sheet -->
+<div id="fullsheet" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+  <div class="bg-gray-900 rounded-2xl shadow-2xl w-full max-w-5xl max-h-full overflow-hidden flex flex-col border border-gray-800">
+    <div class="p-5 border-b border-gray-800 flex justify-between items-center">
+      <h2 class="text-lg font-semibold">Full Manager</h2>
+      <button id="fsClose" class="text-gray-400 hover:text-white">Close</button>
+    </div>
+    <div id="fsBody" class="flex-1 overflow-auto p-4"></div>
+    <div class="p-4 border-t border-gray-800 flex gap-3 justify-end">
+      <button id="fsImport" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-md">Import</button>
+      <button id="fsExport" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-md">Export</button>
     </div>
   </div>
-  <div class="fs-body" id="fsBody"></div>
-  <div class="fs-footer">
-    <button id="fsAdd" class="btn">Add</button>
-    <button id="fsImportCsv" class="btn">Import CSV</button>
-  </div>
 </div>
 
-<div id="modal" class="modal" style="display:none">
-  <div class="modal-content">
-    <form id="modalForm">
-      <input id="modalName" placeholder="Name" required />
-      <select id="modalCat"></select>
-      <input id="modalPath" placeholder="Path/URL" required />
-      <div style="display:flex;gap:8px">
-        <button type="submit">Save</button>
-        <button type="button" class="cancel" id="modalCancel">Cancel</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<script src="https://unpkg.com/three@0.153.0/build/three.min.js"></script>
 <script>
-// === Rebuilt Logic (merged with CLDSRF v3 features in Free Bounce style) ===
-const DB_NAME = 'fb_db_v3';
-const STORE_ITEMS = 'items';
-const STORE_STACKS = 'stacks';
-const STORE_CATS = 'categories';
-const STORE_SETTINGS = 'settings';
-const DEFAULT_CATS = ['Communication & Community', 'Automation & Email', 'Sales & Distribution', 'Business & Legal', 'Data, Analytics & Optimization', 'Suggested Tools'];
-const DEFAULT_ITEMS = [
-  {id: crypto.randomUUID(), name:'Discord', category:DEFAULT_CATS[0], path:'https://discord.gg/your-server', icon:''},
-  {id: crypto.randomUUID(), name:'Instagram', category:DEFAULT_CATS[0], path:'https://instagram.com/yourhandle', icon:''},
-  {id: crypto.randomUUID(), name:'YouTube Studio', category:DEFAULT_CATS[0], path:'https://studio.youtube.com', icon:''},
-  {id: crypto.randomUUID(), name:'Zapier', category:DEFAULT_CATS[1], path:'https://zapier.com', icon:''},
-  {id: crypto.randomUUID(), name:'Gumroad', category:DEFAULT_CATS[2], path:'https://gumroad.com', icon:''}
-];
+/* ========================================
+   Free Bounce v5.0 — FULL PRD
+   - Smart URL parsing
+   - Stacks + Loadouts
+   - Import/Export .json + .md
+   - Offline-first with sync queue
+   - Tray-ready
+   ======================================== */
 
-let db, items = [], stacks = {}, categories = DEFAULT_CATS, settings = {theme: 'auto', encrypt: false, encryptKey: null};
-let currentFilter = '', currentSearch = '', sortBy = 'name', sortAsc = true;
-let encryptEnabled = false;
+const DB_NAME = 'freebounce_v5';
+let db, items = [], stacks = {}, loadouts = {}, categories = ['Social', 'Tools', 'Design', 'Dev', 'Media', 'Other'];
+let sortBy = 'name', sortAsc = true, search = '', filter = '', currentView = 'bookmarks';
+let syncQueue = [], isOnline = navigator.onLine;
+let ctxCleanup = null, renderer, animId;
 
+/* ——————— IndexedDB ——————— */
 async function initDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
+    const req = indexedDB.open(DB_NAME, 2);
     req.onupgradeneeded = e => {
       db = e.target.result;
-      db.createObjectStore(STORE_ITEMS, {keyPath: 'id'});
-      db.createObjectStore(STORE_STACKS);
-      db.createObjectStore(STORE_CATS, {autoIncrement: true});
-      db.createObjectStore(STORE_SETTINGS, {keyPath: 'key'});
+      ['items', 'stacks', 'loadouts', 'categories', 'settings'].forEach(store => {
+        if (!db.objectStoreNames.contains(store)) {
+          db.createObjectStore(store, store === 'items' ? { keyPath: 'id' } : {});
+        }
+      });
     };
-    req.onsuccess = e => { db = e.target.result; migrateData(); loadAll(); resolve(); };
+    req.onsuccess = e => { db = e.target.result; loadAll().then(resolve); };
     req.onerror = reject;
   });
 }
 
-async function migrateData() {
-  const legacy = localStorage.getItem('fb_quickcompact_v1');
-  if (legacy) {
-    await saveItems(JSON.parse(legacy).map(it => ({...it, icon: getFavicon(it.path)})));
-    localStorage.removeItem('fb_quickcompact_v1');
-  }
-}
-
 async function loadAll() {
-  items = await getItems() || DEFAULT_ITEMS;
-  stacks = await getStacks() || {};
-  categories = await getCategories() || DEFAULT_CATS;
-  settings = await getSettings() || settings;
-  encryptEnabled = settings.encrypt;
-  if (encryptEnabled) settings.encryptKey = await promptEncryptKey();
-  applyTheme(settings.theme);
-  renderCategories();
-  renderStackOptions();
-  render();
+  items = await getAll('items') || [];
+  stacks = await getAll('stacks') || {};
+  loadouts = await getAll('loadouts') || {};
+  const cats = await getAll('categories');
+  if (cats?.length) categories = cats;
+  const settings = await get('settings', 'config');
+  if (settings?.encrypt) enableEncryption();
+  renderCategories(); renderLoadouts(); renderView();
+  setupSync();
 }
 
-async function getItems() { return transaction(STORE_ITEMS, 'readonly', store => store.getAll()); }
-async function saveItems(newItems = items) {
-  if (encryptEnabled) newItems = newItems.map(it => ({...it, path: encrypt(it.path, settings.encryptKey)}));
-  return transaction(STORE_ITEMS, 'readwrite', store => { store.clear(); newItems.forEach(it => store.put(it)); });
+/* ——————— Sync & Offline ——————— */
+function setupSync() {
+  window.addEventListener('online', () => { isOnline = true; flushSyncQueue(); });
+  window.addEventListener('offline', () => isOnline = false);
 }
-async function getStacks() { return transaction(STORE_STACKS, 'readonly', store => store.getAll()); }
-async function saveStacks() { return transaction(STORE_STACKS, 'readwrite', store => { store.clear(); Object.entries(stacks).forEach(([k, v]) => store.put(v, k)); }); }
-async function getCategories() { return transaction(STORE_CATS, 'readonly', store => store.getAll()); }
-async function saveCategories() { return transaction(STORE_CATS, 'readwrite', store => { store.clear(); categories.forEach(cat => store.add(cat)); }); }
-async function getSettings() { return transaction(STORE_SETTINGS, 'readonly', store => store.getAll().then(res => res.reduce((acc, s) => ({...acc, [s.key]: s.value}), {}))); }
-async function saveSettings() { return transaction(STORE_SETTINGS, 'readwrite', store => { store.clear(); Object.entries(settings).forEach(([k, v]) => store.put({key: k, value: v})); }); }
-function transaction(storeName, mode, cb) {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, mode);
-    tx.oncomplete = resolve;
-    tx.onerror = reject;
-    resolve(cb(tx.objectStore(storeName)));
-  });
+async function queueOp(op) {
+  syncQueue.push(op);
+  if (isOnline) await flushSyncQueue();
 }
-
-async function encrypt(text, key) {
-  if (!encryptEnabled || !key) return text;
-  const enc = new TextEncoder();
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const cryptoKey = await crypto.subtle.importKey('raw', enc.encode(key), 'AES-GCM', true, ['encrypt']);
-  const encrypted = await crypto.subtle.encrypt({name: 'AES-GCM', iv}, cryptoKey, enc.encode(text));
-  return btoa(String.fromCharCode(...iv) + String.fromCharCode(...new Uint8Array(encrypted)));
-}
-
-async function decrypt(cipher, key) {
-  if (!encryptEnabled || !key) return cipher;
-  const data = atob(cipher);
-  const iv = new Uint8Array(data.slice(0,12).split('').map(c => c.charCodeAt(0)));
-  const encrypted = new Uint8Array(data.slice(12).split('').map(c => c.charCodeAt(0)));
-  const cryptoKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(key), 'AES-GCM', true, ['decrypt']);
-  const decrypted = await crypto.subtle.decrypt({name: 'AES-GCM', iv}, cryptoKey, encrypted);
-  return new TextDecoder().decode(decrypted);
-}
-
-async function promptEncryptKey() {
-  const key = prompt('Enter encryption key:');
-  if (!key) encryptEnabled = false;
-  return key;
-}
-
-// DOM refs
-const bodyEl = document.getElementById('body');
-const nameIn = document.getElementById('nameIn');
-const catIn = document.getElementById('catIn');
-const pathIn = document.getElementById('pathIn');
-const addBtn = document.getElementById('addBtn');
-const panel = document.getElementById('panel');
-const resizer = document.getElementById('resizer');
-const expandBtn = document.getElementById('expandBtn');
-const hdrVisual = document.getElementById('hdrVisual');
-const toggleFX = document.getElementById('toggleFX');
-const catFilter = document.getElementById('catFilter');
-const searchIn = document.getElementById('searchIn');
-const stackSelect = document.getElementById('stackSelect');
-const saveStackBtn = document.getElementById('saveStack');
-const toggleThemeBtn = document.getElementById('toggleTheme');
-const encryptToggleBtn = document.getElementById('encryptToggle');
-const modal = document.getElementById('modal');
-const modalForm = document.getElementById('modalForm');
-const modalName = document.getElementById('modalName');
-const modalCat = document.getElementById('modalCat');
-const modalPath = document.getElementById('modalPath');
-const modalCancel = document.getElementById('modalCancel');
-const fullsheet = document.getElementById('fullsheet');
-const fsBody = document.getElementById('fsBody');
-const fsClose = document.getElementById('fsClose');
-const fsExportCsv = document.getElementById('fsExportCsv');
-const fsAdd = document.getElementById('fsAdd');
-const fsImportCsv = document.getElementById('fsImportCsv');
-const fsBulkDel = document.getElementById('fsBulkDel');
-
-// Render categories
-function renderCategories() {
-  [catIn, catFilter, modalCat].forEach(sel => {
-    sel.innerHTML = '';
-    categories.forEach(c => {
-      const o = document.createElement('option');
-      o.value = c; o.textContent = c;
-      sel.appendChild(o);
-    });
-  });
-  catFilter.insertBefore(new Option('All categories', ''), catFilter.firstChild);
-  const addCatOpt = document.createElement('option');
-  addCatOpt.value = 'add_new'; addCatOpt.textContent = '+ Add New Category';
-  catIn.appendChild(addCatOpt);
-  modalCat.appendChild(addCatOpt.cloneNode(true));
-}
-
-// Render table
-function render() {
-  let filtered = items;
-  if (currentFilter) filtered = filtered.filter(it => it.category === currentFilter);
-  if (currentSearch) filtered = filtered.filter(it => it.name.toLowerCase().includes(currentSearch) || it.path.toLowerCase().includes(currentSearch));
-  filtered.sort((a, b) => {
-    const valA = a[sortBy], valB = b[sortBy];
-    return sortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
-  });
-  bodyEl.innerHTML = '';
-  filtered.forEach(it => {
-    const tr = document.createElement('tr');
-    tr.dataset.id = it.id;
-    tr.draggable = true;
-    tr.innerHTML = `
-      <td class="col-icon"><img src="${it.icon || 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='}" width="16" height="16" alt="" /></td>
-      <td class="col-name">${esc(it.name)}</td>
-      <td class="col-cat">${esc(it.category || '')}</td>
-      <td class="col-path" title="${esc(it.path)}">${esc(it.path)}</td>
-    `;
-    tr.addEventListener('dblclick', () => openItem(it));
-    tr.addEventListener('contextmenu', e => { e.preventDefault(); ctxMenu(e.pageX, e.pageY, it); });
-    tr.addEventListener('mouseover', () => onHoverItem(it));
-    tr.addEventListener('mouseleave', () => onLeaveItem());
-    tr.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', it.id); tr.style.opacity = 0.5; });
-    tr.addEventListener('dragend', () => { tr.style.opacity = ''; saveItems(); render(); });
-    tr.addEventListener('dragover', e => { e.preventDefault(); tr.classList.add('row-hover'); });
-    tr.addEventListener('dragleave', () => tr.classList.remove('row-hover'));
-    tr.addEventListener('drop', e => { e.preventDefault(); tr.classList.remove('row-hover'); reorder(e.dataTransfer.getData('text/plain'), it.id); });
-    bodyEl.appendChild(tr);
-  });
-  adjustPanelHeight(filtered.length);
-}
-
-function esc(s) { return String(s || '').replace(/[&<>"']/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[m])); }
-
-async function openItem(it) {
-  let path = it.path;
-  if (encryptEnabled) path = await decrypt(path, settings.encryptKey);
-  if (!validatePath(path)) return alert('Invalid path');
-  if (/^https?:\/\//i.test(path)) window.open(path, '_blank', 'noopener');
-  else window.open(path);
-}
-
-function validatePath(p) {
-  return p && (p.startsWith('http') || p.startsWith('file://') || p.startsWith('/'));
-}
-
-function getFavicon(url) {
-  if (!url.startsWith('http')) return '';
-  return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}`;
-}
-
-function autoCategorize(path) {
-  if (path.includes('discord')) return categories[0];
-  if (path.includes('zapier')) return categories[1];
-  return categories[0];
-}
-
-function reorder(srcId, targetId) {
-  const srcIndex = items.findIndex(it => it.id === srcId);
-  const tgtIndex = items.findIndex(it => it.id === targetId);
-  if (srcIndex < 0 || tgtIndex < 0) return;
-  const [node] = items.splice(srcIndex, 1);
-  items.splice(tgtIndex, 0, node);
-  saveItems();
-  render();
-}
-
-let activeMenu = null;
-function ctxMenu(x, y, it) {
-  if (activeMenu) activeMenu.remove();
-  const menu = document.createElement('div');
-  menu.className = 'ctx-menu';
-  menu.style.left = x + 'px';
-  menu.style.top = y + 'px';
-  menu.innerHTML = `
-    <div id="o">Open</div>
-    <div id="e">Edit</div>
-    <div id="c">Change Category</div>
-    <div id="s">Save as Loadout</div>
-    <div style="color:#e66" id="d">Delete</div>
-  `;
-  document.body.appendChild(menu);
-  activeMenu = menu;
-  setTimeout(() => {
-    document.addEventListener('click', removeMenuOnce);
-    document.addEventListener('keydown', escHandler);
-  }, 10);
-  menu.querySelector('#o').onclick = () => { openItem(it); removeMenu(); };
-  menu.querySelector('#e').onclick = () => { editItem(it); removeMenu(); };
-  menu.querySelector('#c').onclick = () => { changeCategory(it); removeMenu(); };
-  menu.querySelector('#s').onclick = () => { saveSingleAsStack(it); removeMenu(); };
-  menu.querySelector('#d').onclick = () => { if (confirm('Delete?')) deleteItem(it); removeMenu(); };
-}
-function removeMenu() { if (activeMenu) { activeMenu.remove(); activeMenu = null; } document.removeEventListener('click', removeMenuOnce); document.removeEventListener('keydown', escHandler); }
-function removeMenuOnce(e) { if (activeMenu && !activeMenu.contains(e.target)) removeMenu(); }
-function escHandler(e) { if (e.key === 'Escape') removeMenu(); }
-
-function showModal(title, it = {}) {
-  modal.style.display = 'flex';
-  modalForm.onsubmit = async e => {
-    e.preventDefault();
-    let cat = modalCat.value;
-    if (cat === 'add_new') cat = prompt('New category name:');
-    if (cat && !categories.includes(cat)) { categories.push(cat); saveCategories(); renderCategories(); }
-    const node = {
-      id: it.id || crypto.randomUUID(),
-      name: modalName.value,
-      category: cat || autoCategorize(modalPath.value),
-      path: modalPath.value,
-      icon: getFavicon(modalPath.value)
-    };
-    if (it.id) {
-      const idx = items.findIndex(x => x.id === it.id);
-      items[idx] = node;
-    } else items.unshift(node);
-    await saveItems();
-    render();
-    modal.style.display = 'none';
-  };
-  modalName.value = it.name || '';
-  modalCat.value = it.category || '';
-  modalPath.value = it.path || '';
-}
-modalCancel.onclick = () => modal.style.display = 'none';
-
-function editItem(it) { showModal('Edit Item', it); }
-function changeCategory(it) { showModal('Change Category', it); }
-function saveSingleAsStack(it) {
-  const name = prompt('Loadout name:');
-  if (!name) return;
-  stacks[name] = [it];
-  saveStacks();
-  renderStackOptions();
-}
-function deleteItem(it) {
-  items = items.filter(x => x.id !== it.id);
-  saveItems();
-  render();
-}
-
-catFilter.addEventListener('change', () => { currentFilter = catFilter.value; render(); });
-searchIn.addEventListener('input', () => { currentSearch = searchIn.value.toLowerCase(); render(); });
-document.querySelectorAll('thead th[data-sort]').forEach(th => {
-  th.addEventListener('click', () => {
-    const key = th.dataset.sort;
-    if (sortBy === key) sortAsc = !sortAsc;
-    else { sortBy = key; sortAsc = true; }
-    document.querySelectorAll('thead th').forEach(t => t.textContent = t.textContent.replace(/[▲▼]/g, ''));
-    th.textContent += sortAsc ? ' ▲' : ' ▼';
-    render();
-  });
-});
-
-addBtn.addEventListener('click', () => {
-  const p = pathIn.value.trim();
-  if (!validatePath(p)) return alert('Invalid path');
-  const n = nameIn.value.trim() || p.split('/').pop();
-  let c = catIn.value;
-  if (c === 'add_new') c = prompt('New category:');
-  if (c && !categories.includes(c)) { categories.push(c); saveCategories(); renderCategories(); }
-  const node = { id: crypto.randomUUID(), name: n, category: c || autoCategorize(p), path: p, icon: getFavicon(p) };
-  items.unshift(node);
-  saveItems();
-  render();
-  nameIn.value = ''; pathIn.value = '';
-});
-nameIn.addEventListener('keydown', e => { if (e.key === 'Enter') addBtn.click(); });
-
-saveStackBtn.addEventListener('click', () => {
-  const name = prompt('Loadout name:');
-  if (!name) return;
-  if (stacks[name] && confirm('Merge with existing?')) stacks[name] = [...stacks[name], ...items];
-  else stacks[name] = [...items];
-  saveStacks();
-  renderStackOptions();
-});
-stackSelect.addEventListener('change', () => {
-  const k = stackSelect.value;
-  if (!k) return;
-  if (confirm('Load and replace?')) items = [...stacks[k]];
-  else if (confirm('Merge?')) items = [...items, ...stacks[k]];
-  saveItems();
-  render();
-});
-function renderStackOptions() {
-  stackSelect.innerHTML = '';
-  const op = new Option('(Current)', '');
-  stackSelect.appendChild(op);
-  Object.keys(stacks).forEach(k => {
-    const o = new Option(k, k);
-    stackSelect.appendChild(o);
-  });
-}
-
-fsClose.addEventListener('click', () => fullsheet.style.display = 'none');
-fsAdd.addEventListener('click', () => showModal('Add Item'));
-fsExportCsv.addEventListener('click', () => {
-  const csv = 'Name,Category,Path\n' + items.map(it => `${it.name},${it.category},${it.path}`).join('\n');
-  const blob = new Blob([csv], {type: 'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'fb_stack.csv';
-  a.click();
-});
-fsImportCsv.addEventListener('click', () => {
-  const f = document.createElement('input');
-  f.type = 'file'; f.accept = '.csv';
-  f.onchange = () => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const lines = reader.result.split('\n').slice(1);
-      const newItems = lines.map(line => {
-        const [name, category, path] = line.split(',');
-        return {id: crypto.randomUUID(), name, category, path, icon: getFavicon(path)};
-      });
-      items = [...items, ...newItems];
-      saveItems();
-      render();
-      renderFullsheet();
-    };
-    reader.readAsText(f.files[0]);
-  };
-  f.click();
-});
-fsBulkDel.addEventListener('click', () => {
-  const selected = [...fsBody.querySelectorAll('input[type="checkbox"]:checked')].map(cb => cb.dataset.id);
-  if (selected.length && confirm('Delete selected?')) {
-    items = items.filter(it => !selected.includes(it.id));
-    saveItems();
-    render();
-    renderFullsheet();
+async function flushSyncQueue() {
+  while (syncQueue.length && isOnline) {
+    const op = syncQueue.shift();
+    try { await op(); } catch (e) { syncQueue.unshift(op); break; }
   }
-});
-function renderFullsheet() {
-  fsBody.innerHTML = '';
-  const table = document.createElement('table');
-  table.style.width = '100%'; table.style.borderCollapse = 'collapse';
-  table.innerHTML = '<thead><tr><th><input type="checkbox" id="selectAll" /></th><th>Name</th><th>Category</th><th>Path/URL</th><th>Actions</th></tr></thead>';
-  const tb = document.createElement('tbody');
-  items.forEach(it => {
-    const tr = document.createElement('tr');
-    tr.style.borderBottom = '1px solid var(--line)';
-    tr.innerHTML = `
-      <td><input type="checkbox" data-id="${it.id}" /></td>
-      <td>${esc(it.name)}</td>
-      <td>${esc(it.category || '')}</td>
-      <td style="color:var(--muted)">${esc(it.path)}</td>
-      <td><button data-id="${it.id}" class="editRow">Edit</button> <button data-id="${it.id}" class="delRow" style="color:#e66">Delete</button></td>
-    `;
-    tb.appendChild(tr);
+}
+
+/* ——————— Data Ops ——————— */
+function tx(store, mode = 'readonly') { return db.transaction(store, mode).objectStore(store); }
+async function getAll(store) { return new Promise(r => tx(store).getAll().onsuccess = e => r(e.target.result)); }
+async function get(store, key) { return new Promise(r => tx(store).get(key).onsuccess = e => r(e.target.result)); }
+async function save(store, data) {
+  const t = tx(store, 'readwrite');
+  await new Promise(r => t.clear().onsuccess = r);
+  if (Array.isArray(data)) for (const d of data) await new Promise(r => t.add(d).onsuccess = r);
+  else for (const [k, v] of Object.entries(data)) await new Promise(r => t.put(v, k).onsuccess = r);
+  return new Promise(r => t.transaction.oncomplete = r);
+}
+
+/* ——————— URL & Bookmark Logic ——————— */
+function normalizeUrl(input) {
+  let s = String(input || '').trim();
+  if (!s) throw new Error('empty');
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(s)) {
+    s = s.replace(/\s+/g, '');
+    s = s.includes('.') ? 'https://' + s : 'https://' + s + '.com';
+  }
+  const u = new URL(s);
+  if ((u.protocol === 'http:' && u.port === '80') || (u.protocol === 'https:' && u.port === '443')) u.port = '';
+  if (u.pathname === '/') u.pathname = '';
+  return u.toString();
+}
+function extractNameFromUrl(url, name) {
+  if (name?.trim()) return name.trim();
+  const host = new URL(url).hostname.replace(/^www\./i, '');
+  const candidate = host.split('.')[0];
+  return candidate.charAt(0).toUpperCase() + candidate.slice(1);
+}
+function getFavicon(url) {
+  const host = new URL(url).hostname;
+  return `https://www.google.com/s2/favicons?domain=${host}&sz=64`;
+}
+
+/* ——————— Rendering ——————— */
+function $(id) { return document.getElementById(id); }
+function esc(str) { return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+function renderCategories() {
+  ['catIn', 'catFilter'].forEach(id => {
+    const sel = $(id);
+    sel.innerHTML = id === 'catFilter' ? '<option value="">All</option>' : '';
+    categories.forEach(c => sel.add(new Option(c, c)));
+    if (id === 'catIn') sel.add(new Option('+ New', 'new'));
   });
-  table.appendChild(tb);
-  fsBody.appendChild(table);
-  fsBody.querySelectorAll('.editRow').forEach(btn => btn.addEventListener('click', e => editItem(items.find(it => it.id === e.target.dataset.id))));
-  fsBody.querySelectorAll('.delRow').forEach(btn => btn.addEventListener('click', e => { if (confirm('Delete?')) deleteItem(items.find(it => it.id === e.target.dataset.id)); renderFullsheet(); }));
-  const selectAll = document.getElementById('selectAll');
-  selectAll.addEventListener('change', () => fsBody.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = selectAll.checked));
-}
-expandBtn.addEventListener('click', () => { renderFullsheet(); fullsheet.style.display = 'flex'; });
-
-// Resizer
-let dragging = false, startX = 0, startW = 0;
-resizer.addEventListener('mousedown', e => { dragging = true; startX = e.clientX; startW = parseInt(getComputedStyle(panel).width); document.body.style.userSelect = 'none'; });
-document.addEventListener('mousemove', e => {
-  if (!dragging) return;
-  const dx = e.clientX - startX;
-  const newW = Math.max(220, Math.min(800, startW + dx));
-  document.documentElement.style.setProperty('--w', newW + 'px');
-  panel.style.width = newW + 'px';
-  render();
-});
-document.addEventListener('mouseup', () => { if (dragging) { dragging = false; document.body.style.userSelect = 'auto'; } });
-
-// Keyboard toggle
-document.addEventListener('keydown', e => {
-  if (e.ctrlKey && e.key === '`') panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
-  if (e.key === 'Delete' && document.activeElement.tagName === 'TR') deleteItem({id: document.activeElement.dataset.id});
-});
-
-// Themes
-function applyTheme(theme) {
-  document.body.classList.remove('light');
-  if (theme === 'light' || (theme === 'auto' && !matchMedia('(prefers-color-scheme: dark)').matches)) document.body.classList.add('light');
-  settings.theme = theme;
-  saveSettings();
-}
-toggleThemeBtn.addEventListener('click', () => {
-  const themes = ['dark', 'light', 'auto'];
-  const next = themes[(themes.indexOf(settings.theme) + 1) % 3];
-  applyTheme(next);
-});
-
-// Encryption
-encryptToggleBtn.addEventListener('click', async () => {
-  encryptEnabled = !encryptEnabled;
-  settings.encrypt = encryptEnabled;
-  if (encryptEnabled) settings.encryptKey = await promptEncryptKey();
-  await saveItems();
-  saveSettings();
-  encryptToggleBtn.style.opacity = encryptEnabled ? 1 : 0.5;
-});
-encryptToggleBtn.style.opacity = encryptEnabled ? 1 : 0.5;
-
-// Adjust height
-function adjustPanelHeight(count) {
-  const rowH = 36, headerH = 64, addH = 56, maxH = window.innerHeight * 0.72;
-  panel.style.maxHeight = Math.min(maxH, headerH + addH + (count * rowH) + 50) + 'px';
 }
 
-// Three.js visual
-let renderer, scene, camera, mesh, wire, lightA, lightB, animId, fxEnabled = true, particleSystem;
-function safeInitThree() {
-  try {
-    if (renderer) return;
-    const wrap = hdrVisual;
-    const w = wrap.clientWidth, h = wrap.clientHeight;
-    renderer = new THREE.WebGLRenderer({alpha: true, antialias: true});
-    renderer.setSize(w, h);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-    wrap.appendChild(renderer.domElement);
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 50);
-    camera.position.set(0, 0, 3);
-    const geo = new THREE.OctahedronGeometry(0.9, 1);
-    const mat = new THREE.MeshStandardMaterial({color: 0x2a76d2, emissive: 0x2a76d2, metalness: 0.2, roughness: 0.25, emissiveIntensity: 0.5});
-    mesh = new THREE.Mesh(geo, mat); scene.add(mesh);
-    const wf = new THREE.MeshBasicMaterial({color: 0xffffff, wireframe: true, transparent: true, opacity: 0.08});
-    wire = new THREE.Mesh(geo, wf); scene.add(wire);
-    lightA = new THREE.PointLight(0x2a76d2, 0.9, 10); lightA.position.set(2, 2, 3); scene.add(lightA);
-    lightB = new THREE.PointLight(0x2a76d2, 0.6, 10); lightB.position.set(-2, -1, 2); scene.add(lightB);
-    scene.add(new THREE.AmbientLight(0x223344, 0.5));
-    const pGeo = new THREE.BufferGeometry();
-    const positions = new Float32Array(100 * 3);
-    for (let i = 0; i < 100; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 4;
-      positions[i * 3 + 1] = (Math.random() - 0.5) * 4;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 4;
-    }
-    pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const pMat = new THREE.PointsMaterial({color: 0xffffff, size: 0.05, transparent: true, opacity: 0.5});
-    particleSystem = new THREE.Points(pGeo, pMat);
-    scene.add(particleSystem);
-    new ResizeObserver(() => {
-      const r = hdrVisual.getBoundingClientRect();
-      if (renderer) {
-        renderer.setSize(r.width, r.height);
-        camera.aspect = r.width / r.height;
-        camera.updateProjectionMatrix();
-      }
-    }).observe(hdrVisual);
-  } catch (err) { console.error('Three init', err); }
+function renderLoadouts() {
+  const sel = $('loadoutSelect');
+  sel.innerHTML = '<option value="">(Current)</option>';
+  Object.keys(loadouts).sort().forEach(k => sel.add(new Option(k, k)));
 }
 
-function animate() {
-  if (!fxEnabled) return;
-  try {
-    mesh.rotation.y += 0.008;
-    mesh.rotation.x += 0.004;
-    const t = Date.now() / 600;
-    mesh.material.emissiveIntensity = 0.5 + Math.sin(t) * 0.18;
-    wire.rotation.copy(mesh.rotation);
-    particleSystem.rotation.y += 0.002;
+function renderView() {
+  if (currentView === 'bookmarks') renderBookmarks();
+  else renderStacks();
+}
+
+function renderBookmarks() {
+  let list = items.filter(i =>
+    (!filter || i.category === filter) &&
+    (!search || i.name.toLowerCase().includes(search) || i.path.toLowerCase().includes(search))
+  );
+  list.sort((a, b) => sortAsc ? a[sortBy].localeCompare(b[sortBy]) : b[sortBy].localeCompare(a[sortBy]));
+  
+  const tbody = $('tableBody');
+  tbody.innerHTML = '';
+  list.forEach(item => {
+    const tr = document.createElement('tr');
+    tr.draggable = true;
+    tr.dataset.id = item.id;
+    tr.className = 'cursor-pointer hover:bg-gray-800/50 row-hover transition';
+    tr.innerHTML = `
+      <td class="p-3 flex items-center gap-2">
+        <img src="${item.icon}" class="w-5 h-5 rounded" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 fill=%22%236b7280%22 viewBox=%220 0 16 16%22><circle cx=%228%22 cy=%228%22 r=%228%22/></svg>'">
+        <span class="font-medium truncate">${esc(item.name)}</span>
+      </td>
+      <td class="p-3 text-center text-xs text-gray-400">${esc(item.category)}</td>
+      <td class="p-3 text-xs text-gray-400 truncate max-w-xs" title="${esc(item.path)}">${esc(item.path)}</td>
+    `;
+    tr.ondblclick = () => openItem(item);
+    tr.oncontextmenu = e => { e.preventDefault(); showContextMenu(e, item); };
+    tr.ondragstart = e => e.dataTransfer.setData('text/plain', item.id);
+    tbody.appendChild(tr);
+  });
+}
+
+function renderStacks() {
+  const container = $('stackList');
+  container.innerHTML = '';
+  Object.entries(stacks).forEach(([name, stack]) => {
+    const div = document.createElement('div');
+    div.className = 'bg-gray-800 rounded-lg p-3 space-y-2';
+    div.innerHTML = `
+      <div class="flex justify-between items-center">
+        <h3 class="font-medium">${esc(name)} <span class="text-xs text-gray-400">(${stack.length})</span></h3>
+        <button onclick="loadStack('${name}')" class="text-xs text-blue-400">Load</button>
+      </div>
+      <div class="text-xs text-gray-400 space-y-1">
+        ${stack.map(id => {
+          const item = items.find(i => i.id === id);
+          return item ? `<div>${esc(item.name)}</div>` : '';
+        }).join('')}
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+/* ——————— Actions ——————— */
+async function addItem() {
+  const rawPath = $('pathIn').value.trim();
+  const rawName = $('nameIn').value.trim();
+  if (!rawPath) return alert('Enter a URL');
+  let normalized;
+  try { normalized = normalizeUrl(rawPath); } catch { return alert('Invalid URL'); }
+  const name = extractNameFromUrl(normalized, rawName);
+  const cat = $('catIn').value === 'new' ? prompt('New category:')?.trim() || 'Other' : $('catIn').value;
+  if (cat && !categories.includes(cat)) {
+    categories.push(cat);
+    await save('categories', categories);
+    renderCategories();
+  }
+  const item = {
+    id: crypto.randomUUID(),
+    name, category: cat || 'Other', path: normalized, icon: getFavicon(normalized),
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+  };
+  items.unshift(item);
+  await save('items', items);
+  renderView();
+  $('pathIn').value = $('nameIn').value = '';
+}
+
+async function openItem(item) {
+  window.open(item.path, '_blank', 'noopener');
+}
+
+async function loadStack(name) {
+  const stack = stacks[name];
+  if (!stack) return;
+  items = stack.map(id => items.find(i => i.id === id)).filter(Boolean);
+  await save('items', items);
+  switchView('bookmarks');
+  renderView();
+}
+
+/* ——————— Loadouts ——————— */
+$('saveLoadout').onclick = async () => {
+  const name = prompt('Loadout name:');
+  if (!name?.trim()) return;
+  loadouts[name] = { items: [...items], timestamp: new Date().toISOString(), version: 1 };
+  await save('loadouts', loadouts);
+  renderLoadouts();
+};
+$('loadoutSelect').onchange = async e => {
+  const name = e.target.value;
+  if (!name || !loadouts[name]) return;
+  if (confirm(`Load "${name}"?`)) {
+    items = loadouts[name].items;
+    await save('items', items);
+    renderView();
+  }
+};
+
+/* ——————— Tabs ——————— */
+function switchView(view) {
+  currentView = view;
+  $('bookmarksView').classList.toggle('hidden', view !== 'bookmarks');
+  $('stacksView').classList.toggle('hidden', view !== 'stacks');
+  $('tabBookmarks').className = view === 'bookmarks' ? 'flex-1 px-4 py-2 text-sm font-medium text-blue-400 border-b-2 border-blue-400' : 'flex-1 px-4 py-2 text-sm font-medium text-gray-400';
+  $('tabStacks').className = view === 'stacks' ? 'flex-1 px-4 py-2 text-sm font-medium text-blue-400 border-b-2 border-blue-400' : 'flex-1 px-4 py-2 text-sm font-medium text-gray-400';
+  renderView();
+}
+$('tabBookmarks').onclick = () => switchView('bookmarks');
+$('tabStacks').onclick = () => switchView('stacks');
+
+/* ——————— Import/Export ——————— */
+$('fsExport').onclick = () => {
+  const data = { schema: 2, timestamp: new Date().toISOString(), items, stacks, loadouts, categories };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'freebounce.json' });
+  a.click();
+};
+$('fsImport').onclick = () => {
+  const input = Object.assign(document.createElement('input'), { type: 'file', accept: '.json' });
+  input.onchange = async e => {
+    const file = e.target.files[0];
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (data.schema !== 2) return alert('Invalid schema');
+    items = data.items; stacks = data.stacks; loadouts = data.loadouts; categories = data.categories;
+    await Promise.all([save('items', items), save('stacks', stacks), save('loadouts', loadouts), save('categories', categories)]);
+    renderView(); renderLoadouts(); renderCategories();
+  };
+  input.click();
+};
+
+/* ——————— Events ——————— */
+$('addBtn').onclick = addItem;
+$('pathIn').onkeydown = e => e.key === 'Enter' && addItem();
+$('searchIn').oninput = e => { search = e.target.value.toLowerCase(); renderView(); };
+$('catFilter').onchange = e => { filter = e.target.value; renderView(); };
+$('expandBtn').onclick = () => { $('fullsheet').classList.remove('hidden'); };
+$('fsClose').onclick = () => $('fullsheet').classList.add('hidden');
+
+/* ——————— Three.js ——————— */
+function initThree() {
+  const container = $('octaContainer');
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  container.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+  camera.position.z = 3;
+
+  const geo = new THREE.OctahedronGeometry(0.8, 1);
+  const mat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, emissive: 0x3b82f6, metalness: 0.3, roughness: 0.2 });
+  const octa = new THREE.Mesh(geo, mat);
+  scene.add(octa);
+
+  new ResizeObserver(() => {
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+  }).observe(container);
+
+  function animate() {
+    octa.rotation.y += 0.01;
     renderer.render(scene, camera);
     animId = requestAnimationFrame(animate);
-  } catch (e) { console.error('Animate error', e); cancelAnimationFrame(animId); }
-}
-
-function startFX() { safeInitThree(); fxEnabled = true; animId = requestAnimationFrame(animate); }
-function stopFX() {
-  fxEnabled = false;
-  cancelAnimationFrame(animId);
-  if (renderer && renderer.domElement) {
-    renderer.domElement.remove();
-    renderer.dispose();
-    scene = null; camera = null; mesh = null; wire = null; lightA = null; lightB = null; particleSystem = null;
   }
+  animate();
+
+  // Pause on minimize
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && animId) cancelAnimationFrame(animId);
+    else if (!document.hidden) animate();
+  });
 }
 
-toggleFX.addEventListener('click', () => {
-  fxEnabled = !fxEnabled;
-  toggleFX.textContent = fxEnabled ? 'FX' : 'fx';
-  toggleFX.style.opacity = fxEnabled ? 1 : 0.5;
-  if (fxEnabled) startFX(); else stopFX();
+/* ——————— Init ——————— */
+document.addEventListener('DOMContentLoaded', () => {
+  initDB().then(() => {
+    initThree();
+    if (window.electronAPI) {
+      const trayBtn = document.createElement('button');
+      trayBtn.textContent = 'Tray';
+      trayBtn.className = 'text-xs px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-md ml-1.5';
+      trayBtn.onclick = () => window.electronAPI.showTray();
+      document.querySelector('[data-drag]').appendChild(trayBtn);
+    }
+  });
 });
-hdrVisual.addEventListener('click', () => toggleFX.click());
-
-let hoverTarget = null, glowInterval = null;
-function onHoverItem(it) {
-  hoverTarget = it;
-  startGlow(it);
-  document.querySelector(`tr[data-id="${it.id}"]`).classList.add('row-hover');
-}
-function onLeaveItem() {
-  hoverTarget = null;
-  stopGlow();
-  document.querySelectorAll('tr').forEach(tr => tr.classList.remove('row-hover'));
-}
-
-function startGlow(it) {
-  if (!fxEnabled) return;
-  safeInitThree();
-  const palette = paletteForCategory(it.category);
-  if (mesh) {
-    mesh.material.color.set(palette.color);
-    mesh.material.emissive.set(palette.emissive);
-  }
-  if (particleSystem) particleSystem.material.color.set(palette.color);
-  let phase = 0;
-  clearInterval(glowInterval);
-  glowInterval = setInterval(() => {
-    phase += 0.12;
-    const amp = 0.5 + Math.abs(Math.sin(phase)) * 0.6;
-    if (mesh) mesh.material.emissiveIntensity = 0.4 + amp * 0.6;
-    if (lightA) lightA.intensity = 0.6 + Math.abs(Math.sin(phase * 1.2)) * 1.2;
-    if (lightB) lightB.intensity = 0.3 + Math.abs(Math.cos(phase * 1.1)) * 0.8;
-    if (particleSystem) particleSystem.material.opacity = 0.3 + amp * 0.3;
-  }, 80);
-}
-
-function stopGlow() {
-  clearInterval(glowInterval);
-  glowInterval = null;
-  if (mesh) mesh.material.emissiveIntensity = 0.5;
-  if (particleSystem) particleSystem.material.opacity = 0.5;
-}
-
-function paletteForCategory(cat) {
-  const index = categories.indexOf(cat) % 6;
-  const palettes = [
-    {color: 0x2a76d2, emissive: 0x2a76d2},
-    {color: 0xffb86b, emissive: 0xffd6a6},
-    {color: 0x9b7bff, emissive: 0xc7b8ff},
-    {color: 0x7affc7, emissive: 0x9fffe0},
-    {color: 0x6fe3ff, emissive: 0x9bdfff},
-    {color: 0xff6b6b, emissive: 0xffa6a6}
-  ];
-  return palettes[index] || palettes[0];
-}
-
-// Init
-initDB().catch(console.error);
-startFX();
-
-// Electron tweaks
-document.getElementById('alwaysOnTopBtn').addEventListener('click', () => {
-  const on = !document.body.classList.contains('ontop');
-  if (window.electronAPI) window.electronAPI.toggleAlwaysOnTop(on);
-  document.body.classList.toggle('ontop', on);
-  this.textContent = on ? 'Always on Top (On)' : 'Always on Top';
-});
-document.addEventListener('contextmenu', e => e.preventDefault());
-
+document.querySelectorAll('[data-drag]').forEach(el => el.style.webkitAppRegion = 'drag');
 </script>
 </body>
 </html>
