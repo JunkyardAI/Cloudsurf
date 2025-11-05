@@ -1422,13 +1422,30 @@
             elements.mainAppPanel.classList.add('hidden');
             elements.standbyPanel.classList.remove('hidden');
             renderRecentLinks();
-            // This is where you would tell Electron to resize smaller
-            // e.g., window.electron.resize('small');
+            
+            // --- ELECTRON API CALL (STANDBY) ---
+            if (window.electronWindow && window.electronWindow.setProperties) {
+                window.electronWindow.setProperties({
+                    width: 350, // Based on max-w-xs (320px) + padding
+                    height: 450, // Based on max-h-[450px]
+                    resizable: false
+                });
+            }
+            // --- END ELECTRON API CALL ---
+            
         } else {
             elements.mainAppPanel.classList.remove('hidden');
             elements.standbyPanel.classList.add('hidden');
-            // This is where you would tell Electron to resize larger
-            // e.g., window.electron.resize('large');
+            
+            // --- ELECTRON API CALL (MAIN) ---
+            if (window.electronWindow && window.electronWindow.setProperties) {
+                window.electronWindow.setProperties({
+                    width: 1280, // Default main size from your example
+                    height: 800,  // Default main size from your example
+                    resizable: true
+                });
+            }
+            // --- END ELECTRON API CALL ---
         }
     }
 
@@ -2103,9 +2120,53 @@
     }
     function stackCreator_handleClear() {
         // Using a simpler prompt since we're in a modal
-        if (stackCreator_load().length > 0 && !confirm('Clear all links in the creator?')) return;
-        localStorage.removeItem(CREATOR_KEY);
-        stackCreator_render();
+        if (stackCreator_load().length === 0) {
+            showNotification("List is already empty.");
+            return;
+        }
+
+        // Get the modal elements
+        const modalBody = $('modalBody');
+        const modalFooter = $('modalFooter');
+        
+        // Save old content
+        const oldBody = modalBody.innerHTML;
+        const oldFooter = modalFooter.innerHTML;
+
+        // Show confirmation
+        modalBody.innerHTML = `
+            <p class="text-lg text-gray-100">Are you sure?</p>
+            <p class="text-sm text-gray-300 mt-2">This will permanently delete all ${stackCreator_load().length} links from the creator list. This cannot be undone.</p>
+        `;
+        
+        modalFooter.innerHTML = `
+            <button id="confirmClear" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-md text-sm font-medium transition">Yes, Clear List</button>
+            <button id="cancelClear" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
+        `;
+
+        // Add listeners for the new buttons
+        $('confirmClear').onclick = () => {
+            localStorage.removeItem(CREATOR_KEY);
+            showNotification("Creator list cleared.");
+            
+            // Restore the original modal content
+            modalBody.innerHTML = oldBody;
+            modalFooter.innerHTML = oldFooter;
+            
+            // Re-bind the original listeners
+            stackCreator_bindListeners();
+            stackCreator_render(); // Re-render the (now empty) list
+        };
+
+        $('cancelClear').onclick = () => {
+            // Restore the original modal content
+            modalBody.innerHTML = oldBody;
+            modalFooter.innerHTML = oldFooter;
+            
+            // Re-bind the original listeners
+            stackCreator_bindListeners();
+            // No need to re-render, just restored
+        };
     }
     function stackCreator_handlePaste(e) {
         const text = (e.clipboardData || window.clipboardData).getData('text');
@@ -2153,11 +2214,26 @@
         stackCreator_render();
         
         // Add listeners
-        $('stackCreatorInput').addEventListener('keydown', stackCreator_handleKeydown);
-        $('stackCreatorInput').addEventListener('paste', stackCreator_handlePaste);
-        $('creatorExport').addEventListener('click', stackCreator_handleExport);
-        $('creatorClear').addEventListener('click', stackCreator_handleClear);
-        $('creatorClose').addEventListener('click', hideModal);
+        stackCreator_bindListeners();
+    }
+    
+    /**
+     * Helper function to bind listeners for the Stack Creator modal
+     */
+    function stackCreator_bindListeners() {
+        const input = $('stackCreatorInput');
+        if (input) { // Check if the elements exist
+            input.addEventListener('keydown', stackCreator_handleKeydown);
+            input.addEventListener('paste', stackCreator_handlePaste);
+        }
+        const exportBtn = $('creatorExport');
+        if (exportBtn) exportBtn.addEventListener('click', stackCreator_handleExport);
+        
+        const clearBtn = $('creatorClear');
+        if (clearBtn) clearBtn.addEventListener('click', stackCreator_handleClear);
+        
+        const closeBtn = $('creatorClose');
+        if (closeBtn) closeBtn.addEventListener('click', hideModal);
     }
     
     /**
