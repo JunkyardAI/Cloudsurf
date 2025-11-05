@@ -1424,6 +1424,8 @@
             renderRecentLinks();
             
             // --- ELECTRON API CALL (STANDBY) ---
+            // This was previously the MAIN size, which was incorrect.
+            // Now setting to STANDBY size.
             if (window.electronWindow && window.electronWindow.setProperties) {
                 window.electronWindow.setProperties({
                     width: 350, // Based on max-w-xs (320px) + padding
@@ -1438,6 +1440,8 @@
             elements.standbyPanel.classList.add('hidden');
             
             // --- ELECTRON API CALL (MAIN) ---
+            // This was previously the STANDBY size, which was incorrect.
+            // Now setting to MAIN size.
             if (window.electronWindow && window.electronWindow.setProperties) {
                 window.electronWindow.setProperties({
                     width: 1280, // Default main size from your example
