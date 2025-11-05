@@ -6,6 +6,8 @@
   <title>Cloudstax - Quick Access</title>
   <!-- Load Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Load Three.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <!-- Load Inter font -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -60,96 +62,356 @@
       --tw-ring-shadow: 0 0 #0000;
       box-shadow: 0 0 0 2px var(--tw-ring-color);
     }
+    /* Styles for log viewer */
+     #logContainer {
+        max-height: 40vh;
+        overflow-y: auto;
+        background-color: #1f2937; /* gray-800 */
+        border-radius: 0.375rem; /* rounded-md */
+        padding: 0.75rem; /* p-3 */
+     }
+     .log-entry {
+        font-family: monospace;
+        font-size: 0.75rem; /* text-xs */
+        color: #d1d5db; /* gray-300 */
+        border-bottom: 1px solid #374151; /* gray-700 */
+        padding-bottom: 0.5rem; /* pb-2 */
+        margin-bottom: 0.5rem; /* mb-2 */
+     }
+     .log-entry:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+     }
+     .log-time {
+        color: #6b7280; /* gray-500 */
+        margin-right: 0.5rem; /* mr-2 */
+     }
+     .log-context {
+        color: #60a5fa; /* blue-400 */
+        font-weight: bold;
+     }
+     .log-message {
+        color: #f87171; /* red-400 */
+        display: block;
+        white-space: pre-wrap; /* Wrap long error messages */
+     }
+     /* Styles for drag and drop */
+     .bookmark-item[draggable="true"] {
+        cursor: move;
+     }
+     .drag-handle {
+        cursor: move;
+        color: #6b7280; /* gray-500 */
+     }
+     .drag-handle:hover {
+        color: #9ca3af; /* gray-400 */
+     }
+     .dragging {
+        opacity: 0.5;
+        background: #374151; /* gray-700 */
+     }
+     .drag-over {
+        border-top: 2px solid #3b82f6; /* blue-500 */
+     }
+     /* Styles for pagination */
+     #paginationControls {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 0.75rem; /* p-3 */
+        border-top: 1px solid #374151; /* gray-700 */
+     }
+     .page-btn {
+        background-color: #374151; /* gray-700 */
+        color: #d1d5db; /* gray-300 */
+        padding: 0.25rem 0.75rem;
+        margin: 0 0.25rem;
+        border-radius: 0.375rem; /* rounded-md */
+        font-size: 0.875rem; /* text-sm */
+        font-weight: 500;
+        transition: background-color: 0.15s;
+     }
+     .page-btn:hover:not(:disabled) {
+        background-color: #4b5563; /* gray-600 */
+     }
+     .page-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+     }
+     .page-btn.active {
+        background-color: #3b82f6; /* blue-500 */
+        color: #ffffff;
+     }
+     #pageInfo {
+        font-size: 0.875rem; /* text-sm */
+        color: #9ca3af; /* gray-400 */
+        margin: 0 0.75rem;
+     }
+     #logo-canvas {
+         display: block;
+     }
+     /* Settings Modal Section */
+    .settings-section-title {
+        font-weight: 600;
+        color: #d1d5db; /* gray-300 */
+        margin-bottom: 0.75rem;
+        width: 100%;
+        text-align: left;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 1rem;
+        border-top: 1px solid #4b5563; /* gray-600 */
+        cursor: pointer;
+    }
+    .settings-section:first-child .settings-section-title {
+        border-top: none;
+        padding-top: 0;
+    }
+    .settings-section-title:hover {
+        color: #fff;
+    }
+    .settings-chevron {
+        transition: transform 0.2s;
+    }
+    .settings-section-content {
+        padding-bottom: 0.5rem;
+    }
+    .settings-chevron.rotated {
+        transform: rotate(90deg);
+    }
+    .settings-section-desc {
+        font-size: 0.875rem; /* text-sm */
+        color: #9ca3af; /* gray-400 */
+        margin-bottom: 0.75rem;
+    }
+    #stackIconList {
+        max-height: 20vh;
+        overflow-y: auto;
+    }
+    .stack-icon-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 0.5rem;
+    }
+    .stack-icon-item label {
+        color: #d1d5db; /* gray-300 */
+        font-size: 0.875rem; /* text-sm */
+    }
+    .stack-icon-select {
+        width: 6rem; /* w-24 */
+        font-size: 1rem; /* text-lg */
+        background: #374151; /* gray-700 */
+        border: 1px solid #4b5563; /* gray-600 */
+        color: #f3f4f6; /* gray-100 */
+        border-radius: 0.375rem; /* rounded-md */
+        padding: 0.25rem 0.5rem;
+    }
+    /* Stack Creator Modal Styles */
+    #stackCreatorInput {
+        width: 100%;
+        flex: 1;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #4b5563; /* gray-600 */
+        background: #1f2937; /* gray-800 */
+        color: #f3f4f6; /* gray-100 */
+        font-size: 0.875rem; /* text-sm */
+    }
+    #stackCreatorList {
+        margin: 12px 0 0 0;
+        padding: 0;
+        list-style: none;
+        max-height: 25vh;
+        overflow-y: auto;
+        border: 1px solid #374151; /* gray-700 */
+        border-radius: 8px;
+        padding: 0.5rem;
+    }
+    #stackCreatorList li {
+        padding: 8px;
+        border-radius: 8px;
+        background: #374151; /* gray-700 */
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: center;
+    }
+    #stackCreatorList li:last-child {
+        margin-bottom: 0;
+    }
+    #stackCreatorList .creator-anchor {
+        color: #f3f4f6; /* gray-100 */
+        text-decoration: none;
+        font-size: 0.875rem; /* text-sm */
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    #stackCreatorList .creator-meta {
+        color: #9ca3af; /* gray-400 */
+        font-size: 0.75rem; /* text-xs */
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-top: 2px;
+    }
+    #stackCreatorList .creator-actions button {
+        padding: 4px 6px;
+        border-radius: 6px;
+        border: none;
+        background: #4b5563; /* gray-600 */
+        color: white;
+        cursor: pointer;
+        font-size: 0.75rem; /* text-xs */
+    }
+    #stackCreatorList .creator-actions button:hover {
+        background: #6b7280; /* gray-500 */
+    }
+    #stackCreatorList .creator-actions .creator-delete {
+        background: #ef4444; /* red-500 */
+    }
+    #stackCreatorList .creator-actions .creator-delete:hover {
+        background: #dc2626; /* red-600 */
+    }
   </style>
 </head>
 <body class="h-full bg-gray-950 text-gray-100 md:flex md:items-center md:justify-center md:p-4">
 
-  <!-- Main Application Panel -->
-  <!--
-    Mobile-first: Full width/height by default.
-    md: breakpoint (desktop/electron): Applies max-width, max-height, rounding, shadow, and border.
-  -->
-  <div class="w-full h-full md:w-full md:max-w-2xl md:h-[750px] md:max-h-[90vh] bg-gray-900 md:rounded-2xl md:shadow-2xl flex flex-col overflow-hidden md:border md:border-gray-800">
-    
-    <!-- Header -->
-    <header class="flex items-center gap-3 p-4 border-b border-gray-800 select-none flex-shrink-0">
-      <!-- Icon -->
-      <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-layers"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-      </div>
-      <div>
-        <h1 class="text-base font-semibold">Cloudstax</h1>
-        <p class="text-xs text-gray-400">Your quick-access bookmark stacks</p>
-      </div>
-    </header>
+  <!-- Wrapper for window control -->
+  <div class="w-full h-full">
 
-    <!-- Add Bookmark Form -->
-    <div class="p-4 border-b border-gray-800 flex-shrink-0">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <input id="nameIn" placeholder="Name (e.g., Google)" class="md:col-span-1 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <input id="urlIn" placeholder="URL (e.g., google.com)" class="md:col-span-2 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+    <!-- Main Application Panel -->
+    <div id="mainAppPanel" class="w-full h-full md:w-full md:max-w-2xl md:h-[750px] md:max-h-[90vh] bg-gray-900 md:rounded-2xl md:shadow-2xl flex flex-col overflow-hidden md:border md:border-gray-800">
+      
+      <!-- Header -->
+      <header class="flex items-center gap-3 p-4 border-b border-gray-800 select-none flex-shrink-0">
+        <!-- Icon -->
+        <canvas id="logo-canvas" class="w-10 h-10 rounded-lg"></canvas>
+        <div class="flex-1">
+          <h1 class="text-base font-semibold">Cloudstax</h1>
+          <p class="text-xs text-gray-400">Create Your Own Sites Stacks!</p>
+        </div>
+        <!-- Standby Button -->
+        <button id="standbyBtn" class="p-2 text-gray-400 hover:text-white transition" title="Enter Standby Mode">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-minimize-2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" x2="21" y1="10" y2="3"/><line x1="3" x2="10" y1="21" y2="14"/></svg>
+        </button>
+      </header>
+
+      <!-- Add Bookmark Form -->
+      <div class="p-4 border-b border-gray-800 flex-shrink-0">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <input id="nameIn" placeholder="Name (e.g., Google)" class="md:col-span-1 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <input id="urlIn" placeholder="URL (e.g., google.com)" class="md:col-span-2 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+          <input id="stackIn" placeholder="Stack (e.g., Tools)" class="md:col-span-1 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <div class="md:col-span-1 flex items-center justify-center md:justify-start gap-4 pl-1">
+             <div class="flex items-center">
+                <input id="openExternalIn" type="checkbox" class="form-checkbox">
+                <label for="openExternalIn" class="ml-2 text-sm text-gray-300 select-none">External</label>
+             </div>
+             <div class="flex items-center">
+                <input id="isFavoriteIn" type="checkbox" class="form-checkbox">
+                <label for="isFavoriteIn" class="ml-2 text-sm text-gray-300 select-none">Favorite</label>
+             </div>
+          </div>
+          <button id="addBtn" class="md:col-span-1 w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition flex items-center justify-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            Add
+          </button>
+        </div>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-        <input id="stackIn" placeholder="Stack (e.g., Tools)" class="md:col-span-1 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <button id="addBtn" class="md:col-span-2 w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition flex items-center justify-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-          Add Bookmark
+
+      <!-- Search & Filter -->
+      <div class="flex gap-3 p-4 border-b border-gray-800 flex-shrink-0">
+        <div class="relative flex-1">
+          <input id="searchIn" placeholder="Search..." class="w-full text-sm bg-gray-800 rounded-md pl-10 pr-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        </div>
+        <select id="stackFilter" class="text-sm bg-gray-800 text-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">All Stacks</option>
+          <!-- Stacks will be populated by JS -->
+        </select>
+      </div>
+
+      <!-- Bookmarks List -->
+      <div id="bookmarksView" class="flex-1 overflow-y-auto p-3">
+        <div id="bookmarksList" class="space-y-2">
+          <!-- Bookmarks will be populated by JS -->
+          <p id="loadingIndicator" class="text-center text-gray-400 p-4">Loading bookmarks...</p>
+        </div>
+      </div>
+      
+      <!-- Pagination Controls -->
+      <div id="paginationControls" class="flex-shrink-0 hidden">
+          <!-- Pagination will be populated by JS -->
+      </div>
+
+      <!-- Multi-select Footer -->
+      <div id="multiSelectFooter" class="hidden p-3 bg-gray-800 border-t border-gray-700 flex justify-between items-center flex-shrink-0">
+        <span id="selectedCount" class="text-sm text-gray-300">0 selected</span>
+        <button id="launchSelectedBtn" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-md text-sm font-medium transition flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rocket"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.3.09-3.21l-1.07-1.07a3 3 0 0 0-3.21.09z"/><path d="M12 15.5 3.5 7.3c-.07-.1-.1-.23-.1-.34a.5.5 0 0 1 .5-.5h.34c.11 0 .24.03.34.1l8.2 8.2"/><path d="M15.5 12 7.3 3.5c-.1-.07-.23-.1-.34-.1a.5.5 0 0 0-.5.5v.34c0 .11.03.24.1.34l8.2 8.2"/><path d="M7 21a6.5 6.5 0 0 0 6.5-6.5.5.5 0 0 0-.5-.5H12c-.28 0-.5.22-.5.5A6.5 6.5 0 0 0 21 7"/><path d="M21 3v4h-4"/></svg>
+          Launch Selected
+        </button>
+      </div>
+      
+      <!-- Footer Buttons -->
+      <div id="footerButtons" class="p-3 bg-gray-900 border-t border-gray-800 flex gap-3 justify-end flex-wrap flex-shrink-0">
+        <button id="settingsBtn" class="relative px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            Settings
+            <span id="errorCountBadge" class="hidden absolute -top-2 -right-2 bg-red-600 text-white text-xs rounded-full px-1.5 py-0.5 leading-none">0</span>
+        </button>
+        
+        <button id="reorderBtn" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2" title="Toggle Drag-and-Drop Reordering (All Stacks Only)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-move-vertical"><polyline points="8 18 12 22 16 18"/><polyline points="8 6 12 2 16 6"/><line x1="12" x2="12" y1="2" y2="22"/></svg>
+          Reorder
+        </button>
+        
+        <button id="quickGrabBtn" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2" title="Grab first link from clipboard">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-hand"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"/><path d="M10 9V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5"/><path d="M18 11a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2v0a2 2 0 0 1-2-2v-4"/><path d="M14 10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2v0a2 2 0 0 1-2-2v-6"/><path d="M10 9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2v0a2 2 0 0 1-2-2v-8"/></svg>
+          Quick Grab
         </button>
       </div>
     </div>
-
-    <!-- Search & Filter -->
-    <div class="flex gap-3 p-4 border-b border-gray-800 flex-shrink-0">
-      <div class="relative flex-1">
-        <input id="searchIn" placeholder="Search..." class="w-full text-sm bg-gray-800 rounded-md pl-10 pr-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-      </div>
-      <select id="stackFilter" class="text-sm bg-gray-800 text-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <option value="">All Stacks</option>
-        <!-- Stacks will be populated by JS -->
-      </select>
-    </div>
-
-    <!-- Bookmarks List -->
-    <div id="bookmarksView" class="flex-1 overflow-y-auto p-3">
-      <div id="bookmarksList" class="space-y-2">
-        <!-- Bookmarks will be populated by JS -->
-        <p id="loadingIndicator" class="text-center text-gray-400 p-4">Loading bookmarks...</p>
-      </div>
-    </div>
-
-    <!-- Multi-select Footer -->
-    <div id="multiSelectFooter" class="hidden p-3 bg-gray-800 border-t border-gray-700 flex justify-between items-center flex-shrink-0">
-      <span id="selectedCount" class="text-sm text-gray-300">0 selected</span>
-      <button id="launchSelectedBtn" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-md text-sm font-medium transition flex items-center gap-2">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-rocket"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.3.09-3.21l-1.07-1.07a3 3 0 0 0-3.21.09z"/><path d="M12 15.5 3.5 7.3c-.07-.1-.1-.23-.1-.34a.5.5 0 0 1 .5-.5h.34c.11 0 .24.03.34.1l8.2 8.2"/><path d="M15.5 12 7.3 3.5c-.1-.07-.23-.1-.34-.1a.5.5 0 0 0-.5.5v.34c0 .11.03.24.1.34l8.2 8.2"/><path d="M7 21a6.5 6.5 0 0 0 6.5-6.5.5.5 0 0 0-.5-.5H12c-.28 0-.5.22-.5.5A6.5 6.5 0 0 0 21 7"/><path d="M21 3v4h-4"/></svg>
-        Launch Selected
-      </button>
-    </div>
     
-    <!-- Import/Export Footer -->
-    <div id="importExportFooter" class="p-3 bg-gray-900 border-t border-gray-800 flex gap-3 justify-end flex-shrink-0">
-      <button id="importBtn" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-input"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M2 15h10"/><path d="m5 12-3 3 3 3"/></svg>
-        Import
-      </button>
-      <button id="exportBtn" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-output"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M22 15h-10"/><path d="m19 12-3 3 3 3"/></svg>
-        Export
-      </button>
+    <!-- Standby Panel -->
+    <div id="standbyPanel" class="hidden w-full h-full md:w-full md:max-w-xs md:h-auto md:max-h-[450px] bg-gray-900 md:rounded-2xl md:shadow-2xl flex flex-col overflow-hidden md:border md:border-gray-800 p-6">
+        <div class="flex flex-col items-center">
+            <canvas id="standby-logo-canvas" class="w-48 h-48 rounded-lg"></canvas>
+            <h2 class="text-lg font-semibold text-white mt-4">Cloudstax</h2>
+            <p class="text-sm text-gray-400">Standby Mode</p>
+            
+            <div class="w-full mt-6">
+                <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Recent Links</h3>
+                <div id="recentLinksList" class="space-y-2">
+                    <!-- Recent links will be populated here -->
+                </div>
+            </div>
+            
+            <button id="openAppBtn" class="w-full mt-6 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">
+                Open App
+            </button>
+        </div>
     </div>
+
   </div>
 
   <!-- Generic Modal -->
   <div id="modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-    <div class="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-700">
+    <div class="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-700">
       <div class="p-5 border-b border-gray-700 flex justify-between items-center">
         <h2 id="modalTitle" class="text-lg font-semibold">Modal Title</h2>
         <button id="modalClose" class="text-gray-400 hover:text-white">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </div>
-      <div id="modalBody" class="p-5">
+      <div id="modalBody" class="p-5 overflow-y-auto" style="max-height: 70vh;">
         <!-- Modal content goes here -->
       </div>
       <div id="modalFooter" class="p-4 bg-gray-900/50 border-t border-gray-700 flex gap-3 justify-end">
@@ -164,17 +426,36 @@
   </div>
 
 
-  <!-- Firebase and App Logic -->
+  <!-- App Logic -->
   <script type="module">
     // --- IndexedDB Configuration ---
     const DB_NAME = 'cloudstax_db';
-    const DB_VERSION = 1;
+    const DB_VERSION = 1; 
     const STORE_NAME = 'bookmarks';
+    const STACK_ICONS_KEY = 'cloudstax_stack_icons';
 
     // --- Global State ---
     let db; // IndexedDB instance
     let allBookmarks = []; // Local cache of all bookmarks
     let selectedBookmarks = new Set(); // Set of bookmark IDs for multi-select
+    let errorLog = []; 
+    let isReorderMode = false; // Toggle for Drag/Drop Reordering
+    let currentPage = 1; // For pagination
+    const itemsPerPage = 8; // Items per page
+    let dragSrcEl = null; // For drag/drop
+    let recentLaunches = []; // For Standby Mode
+    let stackIcons = new Map(); // For Stack Icons
+    let hasStandbyBeenInitialized = false; // For standby animation performance
+    let searchDebounceTimer; // For debouncing search input
+    
+    // --- Stack Creator State ---
+    const CREATOR_KEY = 'cloudstax_creator_links_v1';
+    
+    // --- Emoji List for Stack Icons ---
+    const STACK_ICON_LIST = [
+        "", "🚀", "🛠️", "✨", "💡", "📚", "💼", "🎵", "🎮", "🎨", 
+        "📰", "🛒", "☁️", "💰", "🏠", "❤️", "⭐", "🔗", "📁", "⚙️", "📈"
+    ];
     
     // --- DOM Elements ---
     const $ = document.getElementById.bind(document);
@@ -182,12 +463,13 @@
       nameIn: $('nameIn'),
       urlIn: $('urlIn'),
       stackIn: $('stackIn'),
+      openExternalIn: $('openExternalIn'),
+      isFavoriteIn: $('isFavoriteIn'),
       addBtn: $('addBtn'),
       searchIn: $('searchIn'),
       stackFilter: $('stackFilter'),
       bookmarksList: $('bookmarksList'),
       loadingIndicator: $('loadingIndicator'),
-      userIdDisplay: $('userIdDisplay'), // This element no longer exists, but we'll leave the ref just in case to avoid script errors if not all HTML is updated.
       modal: $('modal'),
       modalTitle: $('modalTitle'),
       modalBody: $('modalBody'),
@@ -197,11 +479,160 @@
       multiSelectFooter: $('multiSelectFooter'),
       selectedCount: $('selectedCount'),
       launchSelectedBtn: $('launchSelectedBtn'),
-      importBtn: $('importBtn'),
-      exportBtn: $('exportBtn'),
+      quickGrabBtn: $('quickGrabBtn'), 
+      settingsBtn: $('settingsBtn'),
+      errorCountBadge: $('errorCountBadge'),
+      reorderBtn: $('reorderBtn'), 
+      paginationControls: $('paginationControls'), 
+      // Standby Mode Elements
+      mainAppPanel: $('mainAppPanel'),
+      standbyPanel: $('standbyPanel'),
+      standbyBtn: $('standbyBtn'),
+      openAppBtn: $('openAppBtn'),
+      recentLinksList: $('recentLinksList'),
     };
 
+    // --- Error Logging ---
+
+    /**
+     * Logs an error to the global log and updates the UI.
+     * @param {Error} error - The error object.
+     * @param {string} context - A string describing where the error occurred.
+     */
+    function logError(error, context) {
+        try {
+            console.error(context, error); // Keep console logging
+            const newError = {
+                time: new Date().toLocaleString(),
+                message: error.message || 'Unknown error',
+                context: context,
+                stack: error.stack
+            };
+            errorLog.push(newError);
+            
+            // Update badge
+            elements.errorCountBadge.textContent = errorLog.length;
+            elements.errorCountBadge.classList.remove('hidden');
+            
+        } catch (e) {
+            console.error("CRITICAL: Failed to log error:", e);
+        }
+    }
+
+    // --- Animations ---
+
+    /**
+     * Initializes the Three.js logo animation.
+     */
+    function initThreeJSAnimation() {
+        try {
+            const logoCanvas = document.getElementById('logo-canvas');
+            if (!logoCanvas || !window.THREE) {
+                console.warn('Three.js or canvas not found, skipping logo animation.');
+                return;
+            }
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000); 
+            camera.position.z = 3; 
+            const renderer = new THREE.WebGLRenderer({ canvas: logoCanvas, alpha: true });
+            renderer.setSize(40, 40); 
+            renderer.setPixelRatio(window.devicePixelRatio);
+            
+            const geometry = new THREE.TorusKnotGeometry(0.8, 0.25, 100, 16); 
+            const material = new THREE.MeshStandardMaterial({ 
+                color: 0x3b82f6, // blue-500
+                metalness: 0.3,
+                roughness: 0.4 
+            });
+            const knot = new THREE.Mesh(geometry, material);
+            scene.add(knot);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const pointLight = new THREE.PointLight(0xffffff, 1);
+            pointLight.position.set(2, 3, 4);
+            scene.add(pointLight);
+
+            function animate() {
+                requestAnimationFrame(animate);
+                knot.rotation.x += 0.01;
+                knot.rotation.y += 0.01;
+                renderer.render(scene, camera);
+            }
+            animate();
+        } catch (error) {
+            logError(error, 'initThreeJSAnimation');
+            console.error('Three.js animation failed to initialize', error);
+        }
+    }
+    
+    /**
+     * Initializes the Three.js logo animation for STANDBY MODE.
+     */
+    function initStandbyAnimation() {
+        try {
+            const logoCanvas = document.getElementById('standby-logo-canvas');
+            if (!logoCanvas || !window.THREE) {
+                console.warn('Three.js or canvas not found, skipping standby logo animation.');
+                return;
+            }
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000); 
+            camera.position.z = 3; 
+
+            const renderer = new THREE.WebGLRenderer({ canvas: logoCanvas, alpha: true });
+            renderer.setSize(192, 192); // w-48 h-48
+            renderer.setPixelRatio(window.devicePixelRatio);
+            
+            const geometry = new THREE.TorusKnotGeometry(1, 0.3, 100, 16); 
+            const material = new THREE.MeshStandardMaterial({ 
+                color: 0x3b82f6, // blue-500
+                metalness: 0.3,
+                roughness: 0.4 
+            });
+            const knot = new THREE.Mesh(geometry, material);
+            scene.add(knot);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const pointLight = new THREE.PointLight(0xffffff, 1);
+            pointLight.position.set(2, 3, 4);
+            scene.add(pointLight);
+
+            function animate() {
+                requestAnimationFrame(animate);
+                knot.rotation.x += 0.01;
+                knot.rotation.y += 0.01;
+                renderer.render(scene, camera);
+            }
+            animate();
+            
+            hasStandbyBeenInitialized = true; // Set flag
+        } catch (error) {
+            logError(error, 'initStandbyAnimation');
+            console.error('Three.js standby animation failed to initialize', error);
+        }
+    }
+
     // --- Utility Functions ---
+
+    /**
+     * Debounce function to limit how often a function can run.
+     * @param {Function} func - The function to debounce.
+     * @param {number} delay - The delay in milliseconds.
+     */
+    function debounce(func, delay) {
+        return function(...args) {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(() => {
+                func.apply(this, args);
+            }, delay);
+        };
+    }
 
     /**
      * Normalizes a URL. Adds https:// if no protocol is present.
@@ -211,6 +642,10 @@
     function normalizeUrl(input) {
       let s = String(input || '').trim();
       if (!s) throw new Error('URL cannot be empty.');
+      
+      if (s.startsWith('about:') || s.startsWith('chrome:') || s.startsWith('file:')) {
+        return s;
+      }
       
       if (/^localhost(:\d+)?$/.test(s) || /^\d{1,3}(\.\d{1,3}){3}(:\d+)?$/.test(s)) {
         if (!/^http(s)?:\/\//.test(s)) {
@@ -230,7 +665,7 @@
         return s;
       } catch (e) {
         console.error("Invalid URL construction:", e);
-        throw new Error('Invalid URL format.');
+        return 'https://www.google.com/search?q=' + encodeURIComponent(input);
       }
     }
 
@@ -245,9 +680,39 @@
       try {
         const host = new URL(url).hostname.replace(/^www\./i, '');
         const candidate = host.split('.')[0];
-        return candidate.charAt(0).toUpperCase() + candidate.slice(1);
+        if(candidate.length > 0) {
+            return candidate.charAt(0).toUpperCase() + candidate.slice(1);
+        }
+        const urlParams = new URLSearchParams(new URL(url).search);
+        if(urlParams.has('q')) {
+            return `Search: ${urlParams.get('q')}`;
+        }
       } catch {
-        return "Untitled";
+        if(url.includes('search?q=')) {
+            try {
+                const query = url.split('search?q=')[1].split('&')[0];
+                return `Search: ${decodeURIComponent(query)}`;
+            } catch {}
+        }
+      }
+      return "Untitled";
+    }
+    
+    /**
+     * Attempts to open a URL in the default external browser.
+     * @param {string} url - The URL to open.
+     */
+    function openLinkExternally(url) {
+      try {
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } catch (error) {
+          logError(error, 'openLinkExternally');
       }
     }
 
@@ -276,6 +741,9 @@
       temp.textContent = str;
       return temp.innerHTML;
     }
+    
+    function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function escapeAttr(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
     /**
      * Shows a notification message.
@@ -322,7 +790,8 @@
         request.onupgradeneeded = (event) => {
           const db = event.target.result;
           if (!db.objectStoreNames.contains(STORE_NAME)) {
-            db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            store.createIndex('orderIndex', 'orderIndex', { unique: false });
           }
         };
 
@@ -334,6 +803,7 @@
 
         request.onerror = (event) => {
           console.error("IndexedDB error:", event.target.error);
+          logError(event.target.error, 'initDB: onerror');
           elements.loadingIndicator.textContent = "Error: Could not open local database.";
           reject(event.target.error);
         };
@@ -362,7 +832,7 @@
         };
 
         request.onerror = (event) => {
-          console.error("Error fetching bookmarks:", event.target.error);
+          logError(event.target.error, 'getAllBookmarksFromDB');
           reject(event.target.error);
         };
       });
@@ -378,7 +848,10 @@
         const request = store.add(bookmark);
 
         request.onsuccess = resolve;
-        request.onerror = reject;
+        request.onerror = (event) => {
+            logError(event.target.error, 'addBookmarkToDB');
+            reject(event.target.error);
+        };
       });
     }
 
@@ -392,7 +865,10 @@
         const request = store.put(bookmark);
 
         request.onsuccess = resolve;
-        request.onerror = reject;
+        request.onerror = (event) => {
+            logError(event.target.error, 'updateBookmarkInDB');
+            reject(event.target.error);
+        };
       });
     }
 
@@ -406,7 +882,10 @@
         const request = store.delete(id);
 
         request.onsuccess = resolve;
-        request.onerror = reject;
+        request.onerror = (event) => {
+            logError(event.target.error, 'deleteBookmarkFromDB');
+            reject(event.target.error);
+        };
       });
     }
 
@@ -418,12 +897,16 @@
       return new Promise((resolve, reject) => {
         const transaction = db.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
+        const currentCount = allBookmarks.length;
 
         let importCount = 0;
         bookmarks.forEach(bookmark => {
-          // Add a UUID if the imported item doesn't have one
           if (!bookmark.id) {
             bookmark.id = crypto.randomUUID();
+          }
+          if (bookmark.orderIndex === undefined) {
+             // Place imported items at the end
+            bookmark.orderIndex = currentCount + importCount;
           }
           store.add(bookmark);
           importCount++;
@@ -434,129 +917,420 @@
         };
 
         transaction.onerror = (event) => {
+          logError(event.target.error, 'batchImportToDB');
           reject(event.target.error);
         };
       });
     }
 
+    // --- Stack Icon Functions ---
+    
+    /**
+     * Loads stack icons from localStorage into the global map.
+     */
+    function loadStackIcons() {
+        try {
+            const data = JSON.parse(localStorage.getItem(STACK_ICONS_KEY)) || {};
+            stackIcons = new Map(Object.entries(data));
+        } catch (error) {
+            logError(error, 'loadStackIcons');
+            stackIcons = new Map();
+        }
+    }
+    
+    /**
+     * Saves the global stack icons map to localStorage.
+     */
+    function saveStackIcons(newIconMap) {
+        try {
+            localStorage.setItem(STACK_ICONS_KEY, JSON.stringify(Object.fromEntries(newIconMap)));
+            stackIcons = newIconMap; // Update global state
+        } catch (error) {
+            logError(error, 'saveStackIcons');
+        }
+    }
 
-    // --- Rendering Functions ---
+    // --- Rendering, Pagination, and Reordering ---
+    
+    /**
+     * A lightweight function to refresh the UI from the in-memory state.
+     */
+    function refreshUI() {
+        renderStacks();
+        renderBookmarks();
+    }
 
     /**
      * Renders the list of bookmarks based on current filters.
      */
     function renderBookmarks() {
-      const searchTerm = elements.searchIn.value.toLowerCase();
-      const stackFilter = elements.stackFilter.value;
+      try {
+        const searchTerm = elements.searchIn.value.toLowerCase();
+        const stackFilter = elements.stackFilter.value;
 
-      const filteredBookmarks = allBookmarks.filter(bookmark => {
-        const stack = bookmark.stack || bookmark.category || "General";
-        const matchesSearch = 
-          bookmark.name.toLowerCase().includes(searchTerm) ||
-          bookmark.url.toLowerCase().includes(searchTerm) ||
-          stack.toLowerCase().includes(searchTerm);
-        
-        const matchesStack = 
-          !stackFilter || stack === stackFilter;
+        // Disable/Enable Reorder Button
+        if (stackFilter === "" && !isReorderMode) {
+            elements.reorderBtn.disabled = false;
+            elements.reorderBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        } else if (stackFilter !== "" && !isReorderMode) {
+            elements.reorderBtn.disabled = true;
+            elements.reorderBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+
+        const filteredBookmarks = allBookmarks.filter(bookmark => {
+          const stack = bookmark.stack || bookmark.category || "General";
+          const matchesSearch = 
+            bookmark.name.toLowerCase().includes(searchTerm) ||
+            (bookmark.url && bookmark.url.toLowerCase().includes(searchTerm)) ||
+            stack.toLowerCase().includes(searchTerm);
           
-        return matchesSearch && matchesStack;
-      });
-
-      elements.bookmarksList.innerHTML = '';
-
-      if (filteredBookmarks.length === 0 && allBookmarks.length > 0) {
-        elements.loadingIndicator.textContent = 'No bookmarks found. Try adjusting your search.';
-        elements.bookmarksList.appendChild(elements.loadingIndicator);
-      } else if (allBookmarks.length === 0) {
-        elements.loadingIndicator.textContent = 'No bookmarks yet. Add one above!';
-        elements.bookmarksList.appendChild(elements.loadingIndicator);
-      }
-
-      filteredBookmarks.forEach(bookmark => {
-        const stack = bookmark.stack || bookmark.category || "General";
-        const isChecked = selectedBookmarks.has(bookmark.id) ? 'checked' : '';
+          let matchesStack;
+          if (stackFilter === "Favorites") {
+              matchesStack = bookmark.isFavorite;
+          } else {
+              matchesStack = !stackFilter || stack === stackFilter;
+          }
+            
+          return matchesSearch && matchesStack;
+        });
         
-        const item = document.createElement('div');
-        // Use items-start to align checkbox with the top of the text content
-        item.className = 'flex items-start gap-3 p-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition';
-        
-        item.innerHTML = `
-          <input type="checkbox" class="bookmark-checkbox form-checkbox mt-1" data-id="${bookmark.id}" ${isChecked}>
-          <img src="${sanitize(bookmark.icon)}"
-               class="w-8 h-8 rounded-md flex-shrink-0" 
-               alt=""
-               onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239ca3af%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 class=%22lucide lucide-globe%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22/><path d=%22M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20%22/><path d=%22M2 12h20%22/></svg>'">
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium truncate text-gray-100" title="${sanitize(bookmark.name)}">
-              ${sanitize(bookmark.name)}
-            </p>
-            <p class="text-xs text-gray-400 truncate" title="${sanitize(bookmark.url)}">${sanitize(bookmark.url)}</p>
-          </div>
-          <!-- This container stacks vertically on mobile (default) and becomes a row on sm screens -->
-          <div class="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-3 flex-shrink-0 ml-0 sm:ml-auto">
-            <span class="text-xs bg-gray-600 text-gray-300 px-2 py-0.5 rounded-full whitespace-nowrap">${sanitize(stack)}</span>
-            <div class="flex gap-1">
-              <button class="launch-btn p-1 text-gray-400 hover:text-green-400" data-url="${sanitize(bookmark.url)}" title="Launch">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-external-link"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/></svg>
-              </button>
-              <button class="edit-btn p-1 text-gray-400 hover:text-blue-400" data-id="${bookmark.id}" title="Edit">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><line x1="18" x2="22" y1="2" y2="6"/><path d="M7.5 20.5 19 9l-4-4L3.5 16.5 2 22z"/></svg>
-              </button>
-              <button class="delete-btn p-1 text-gray-400 hover:text-red-400" data-id="${bookmark.id}" title="Delete">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
-              </button>
+        let bookmarksToRender = [];
+        const totalItems = filteredBookmarks.length;
+
+        if (isReorderMode) {
+            // Show all items for reordering, hide pagination
+            bookmarksToRender = filteredBookmarks;
+            elements.paginationControls.classList.add('hidden');
+        } else {
+            // Paginate the results
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            bookmarksToRender = filteredBookmarks.slice(startIndex, endIndex);
+            renderPagination(totalItems);
+        }
+
+        elements.bookmarksList.innerHTML = '';
+
+        if (bookmarksToRender.length === 0 && allBookmarks.length > 0) {
+          elements.loadingIndicator.textContent = 'No bookmarks found. Try adjusting your search.';
+          elements.bookmarksList.appendChild(elements.loadingIndicator);
+        } else if (allBookmarks.length === 0) {
+          elements.loadingIndicator.textContent = 'No bookmarks yet. Add one above!';
+          elements.bookmarksList.appendChild(elements.loadingIndicator);
+        }
+
+        bookmarksToRender.forEach(bookmark => {
+          const stack = bookmark.stack || bookmark.category || "General";
+          const isChecked = selectedBookmarks.has(bookmark.id) ? 'checked' : '';
+          const isFavorite = bookmark.isFavorite || false;
+          const stackIcon = stackIcons.get(stack) || '';
+          
+          const item = document.createElement('div');
+          item.className = 'bookmark-item flex items-start gap-3 p-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition';
+          item.dataset.bookmarkId = bookmark.id; // Used for reordering
+          item.setAttribute('draggable', isReorderMode); // Make draggable
+          
+          item.innerHTML = `
+            <div class="drag-handle ${isReorderMode ? 'flex' : 'hidden'} items-center justify-center h-8 mt-1" title="Drag to reorder">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-grip-vertical"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
             </div>
-          </div>
-        `;
-        elements.bookmarksList.appendChild(item);
-      });
-      
-      // Add event listeners to new elements
-      document.querySelectorAll('.launch-btn').forEach(btn => {
-        btn.addEventListener('click', () => window.open(btn.dataset.url, '_blank', 'noopener'));
-      });
-      document.querySelectorAll('.edit-btn').forEach(btn => {
-        btn.addEventListener('click', () => handleEditClick(btn.dataset.id));
-      });
-      document.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', () => handleDeleteClick(btn.dataset.id));
-      });
-      document.querySelectorAll('.bookmark-checkbox').forEach(cb => {
-        cb.addEventListener('change', () => handleCheckboxChange(cb.dataset.id, cb.checked));
-      });
-      
-      updateMultiSelectFooter();
+            <input type="checkbox" class="bookmark-checkbox form-checkbox mt-1 ${isReorderMode ? 'hidden' : ''}" data-id="${bookmark.id}" ${isChecked}>
+            
+            <img src="${sanitize(bookmark.icon)}"
+                 class="w-8 h-8 rounded-md flex-shrink-0" 
+                 alt=""
+                 onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239ca3af%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 class=%22lucide lucide-globe%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22/><path d=%22M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20%22/><path d=%22M2 12h20%22/></svg>'">
+            
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium truncate text-gray-100" title="${sanitize(bookmark.name)}">
+                ${sanitize(bookmark.name)}
+              </p>
+              <p class="text-xs text-gray-400 truncate" title="${sanitize(bookmark.url)}">${sanitize(bookmark.url)}</p>
+            </div>
+            
+            <div class="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-3 flex-shrink-0 ml-0 sm:ml-auto">
+              <span class="text-xs bg-gray-600 text-gray-300 px-2 py-0.5 rounded-full whitespace-nowrap flex items-center">
+                ${stackIcon ? `<span class="mr-1.5">${stackIcon}</span>` : ''}
+                ${sanitize(stack)}
+              </span>
+              <div class="flex gap-1 ${isReorderMode ? 'hidden' : 'flex'}">
+                <button class="favorite-btn p-1 ${isFavorite ? 'text-yellow-400 hover:text-yellow-300' : 'text-gray-400 hover:text-yellow-400'}" data-id="${bookmark.id}" title="Toggle Favorite">
+                    ${isFavorite 
+                        ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-star"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>` 
+                        : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-star"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`}
+                </button>
+                <button class="launch-btn p-1 text-gray-400 hover:text-green-400" 
+                        data-id="${bookmark.id}"
+                        data-url="${sanitize(bookmark.url)}" 
+                        data-external="${bookmark.openExternal ? 'true' : 'false'}" 
+                        title="Launch">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-external-link"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/></svg>
+                </button>
+                <button class="edit-btn p-1 text-gray-400 hover:text-blue-400" data-id="${bookmark.id}" title="Edit">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><line x1="18" x2="22" y1="2" y2="6"/><path d="M7.5 20.5 19 9l-4-4L3.5 16.5 2 22z"/></svg>
+                </button>
+                <button class="delete-btn p-1 text-gray-400 hover:text-red-400" data-id="${bookmark.id}" title="Delete">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                </button>
+              </div>
+            </div>
+          `;
+          elements.bookmarksList.appendChild(item);
+        });
+        
+        // Add event listeners to new elements
+        document.querySelectorAll('.launch-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const url = btn.dataset.url;
+            const isExternal = btn.dataset.external === 'true';
+            const bookmark = allBookmarks.find(b => b.id === btn.dataset.id);
+            if (bookmark) updateRecentLaunches(bookmark);
+            
+            if (isExternal) {
+              openLinkExternally(url);
+            } else {
+              window.open(url, '_blank', 'noopener');
+            }
+          });
+        });
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+          btn.addEventListener('click', () => handleEditClick(btn.dataset.id));
+        });
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+          btn.addEventListener('click', () => handleDeleteClick(btn.dataset.id));
+        });
+        document.querySelectorAll('.bookmark-checkbox').forEach(cb => {
+          cb.addEventListener('change', () => handleCheckboxChange(cb.dataset.id, cb.checked));
+        });
+        document.querySelectorAll('.favorite-btn').forEach(btn => {
+          btn.addEventListener('click', () => handleToggleFavorite(btn.dataset.id));
+        });
+        
+        updateDragDropListeners(); // Attach/detach drag/drop handlers
+        updateMultiSelectFooter();
+      } catch (error) {
+          logError(error, 'renderBookmarks');
+      }
     }
+    
+    /**
+     * Renders pagination controls.
+     * @param {number} totalItems - Total number of items after filtering.
+     */
+    function renderPagination(totalItems) {
+        const totalPages = Math.ceil(totalItems / itemsPerPage);
+        elements.paginationControls.innerHTML = ''; // Clear existing controls
+        
+        if (totalPages <= 1) {
+            elements.paginationControls.classList.add('hidden');
+            return;
+        }
+
+        elements.paginationControls.classList.remove('hidden');
+
+        // Previous Button
+        const prevBtn = document.createElement('button');
+        prevBtn.textContent = 'Prev';
+        prevBtn.className = 'page-btn';
+        prevBtn.disabled = currentPage === 1;
+        prevBtn.addEventListener('click', () => handlePageClick(currentPage - 1));
+        elements.paginationControls.appendChild(prevBtn);
+
+        // Page Info
+        const pageInfo = document.createElement('span');
+        pageInfo.id = 'pageInfo';
+        pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+        elements.paginationControls.appendChild(pageInfo);
+
+        // Next Button
+        const nextBtn = document.createElement('button');
+        nextBtn.textContent = 'Next';
+        nextBtn.className = 'page-btn';
+        nextBtn.disabled = currentPage === totalPages;
+        nextBtn.addEventListener('click', () => handlePageClick(currentPage + 1));
+        elements.paginationControls.appendChild(nextBtn);
+    }
+    
+    /**
+     * Handles a click on a pagination button.
+     * @param {number} newPage - The new page number to go to.
+     */
+    function handlePageClick(newPage) {
+        currentPage = newPage;
+        renderBookmarks();
+    }
+    
+    /**
+     * Clears multi-select when entering reorder mode.
+     */
+    function clearMultiSelect() {
+        selectedBookmarks.clear();
+        document.querySelectorAll('.bookmark-checkbox:checked').forEach(cb => cb.checked = false);
+        updateMultiSelectFooter();
+    }
+    
+    /**
+     * Handles toggling the reorder mode.
+     */
+    async function handleReorderToggle() {
+        // Only allow reordering in "All Stacks"
+        if (elements.stackFilter.value !== "") {
+            showNotification("Reordering is only available in 'All Stacks' view.", true);
+            return;
+        }
+        
+        isReorderMode = !isReorderMode;
+        
+        if (isReorderMode) {
+            elements.reorderBtn.classList.add('bg-blue-600', 'hover:bg-blue-500');
+            elements.reorderBtn.classList.remove('bg-gray-700', 'hover:bg-gray-600');
+            clearMultiSelect(); // Clear selections
+            currentPage = 1; // Go to first page
+            renderBookmarks(); // Re-render in reorder state
+        } else {
+            elements.reorderBtn.classList.remove('bg-blue-600', 'hover:bg-blue-500');
+            elements.reorderBtn.classList.add('bg-gray-700', 'hover:bg-gray-600');
+            await saveNewOrder(); // Save, which re-loads and re-renders
+        }
+    }
+    
+    /**
+     * Saves the new order of bookmarks to IndexedDB.
+     */
+    async function saveNewOrder() {
+        try {
+            const items = elements.bookmarksList.querySelectorAll('.bookmark-item');
+            const updatePromises = [];
+            
+            items.forEach((item, index) => {
+                const bookmarkId = item.dataset.bookmarkId;
+                const bookmark = allBookmarks.find(b => b.id === bookmarkId);
+                
+                if (bookmark && bookmark.orderIndex !== index) {
+                    bookmark.orderIndex = index;
+                    updatePromises.push(updateBookmarkInDB(bookmark));
+                }
+            });
+            
+            if (updatePromises.length > 0) {
+                await Promise.all(updatePromises);
+                showNotification("Order saved!");
+            }
+            
+            // Full reload is safest here to guarantee sorted order
+            await loadAllBookmarks(); 
+        
+        } catch (error) {
+            logError(error, 'saveNewOrder');
+        }
+    }
+    
+    // --- Drag & Drop Event Handlers ---
+    
+    function handleDragStart(e) {
+        dragSrcEl = this;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', this.innerHTML); 
+        this.classList.add('dragging');
+    }
+    
+    function handleDragOver(e) {
+        if (e.preventDefault) {
+            e.preventDefault(); 
+        }
+        this.classList.add('drag-over');
+        e.dataTransfer.dropEffect = 'move';
+        return false;
+    }
+
+    function handleDragLeave(e) {
+        this.classList.remove('drag-over');
+    }
+    
+    function handleDrop(e) {
+        if (e.stopPropagation) {
+            e.stopPropagation(); 
+        }
+        
+        if (dragSrcEl !== this) {
+            elements.bookmarksList.insertBefore(dragSrcEl, this);
+        }
+        
+        this.classList.remove('drag-over');
+        return false;
+    }
+    
+    function handleDragEnd(e) {
+        this.classList.remove('dragging');
+        elements.bookmarksList.querySelectorAll('.bookmark-item').forEach(item => {
+            item.classList.remove('drag-over');
+        });
+        dragSrcEl = null;
+    }
+    
+    /**
+     * Adds or removes drag/drop listeners based on reorder mode.
+     */
+    function updateDragDropListeners() {
+        const items = elements.bookmarksList.querySelectorAll('.bookmark-item');
+        items.forEach(item => {
+            if (isReorderMode) {
+                item.addEventListener('dragstart', handleDragStart, false);
+                item.addEventListener('dragover', handleDragOver, false);
+                item.addEventListener('dragleave', handleDragLeave, false);
+                item.addEventListener('drop', handleDrop, false);
+                item.addEventListener('dragend', handleDragEnd, false);
+            } else {
+                item.removeEventListener('dragstart', handleDragStart, false);
+                item.removeEventListener('dragover', handleDragOver, false);
+                item.removeEventListener('dragleave', handleDragLeave, false);
+                item.removeEventListener('drop', handleDrop, false);
+                item.removeEventListener('dragend', handleDragEnd, false);
+            }
+        });
+    }
+
 
     /**
      * Updates the stack filter dropdown with unique stacks.
      */
     function renderStacks() {
-      const stacks = [...new Set(allBookmarks.map(b => b.stack || b.category || "General"))].sort();
-      
-      const currentFilter = elements.stackFilter.value;
-      
-      elements.stackFilter.innerHTML = '<option value="">All Stacks</option>';
-      stacks.forEach(stack => {
-        const option = document.createElement('option');
-        option.value = stack;
-        option.textContent = stack;
-        elements.stackFilter.appendChild(option);
-      });
-      
-      elements.stackFilter.value = currentFilter;
+      try {
+        const stacks = [...new Set(allBookmarks.map(b => b.stack || b.category || "General"))].sort();
+        
+        const currentFilter = elements.stackFilter.value;
+        
+        elements.stackFilter.innerHTML = '<option value="">All Stacks</option>';
+        elements.stackFilter.innerHTML += '<option value="Favorites">★ Favorites</option>'; // Add Favorites option
+        
+        stacks.forEach(stack => {
+          const stackIcon = stackIcons.get(stack) || '';
+          const option = document.createElement('option');
+          option.value = stack;
+          option.textContent = `${stackIcon ? `${stackIcon} ` : ''}${stack}`;
+          elements.stackFilter.appendChild(option);
+        });
+        
+        elements.stackFilter.value = currentFilter;
+      } catch (error) {
+          logError(error, 'renderStacks');
+      }
     }
     
     /**
      * Updates the multi-select footer visibility and count.
      */
     function updateMultiSelectFooter() {
-      const count = selectedBookmarks.size;
-      if (count > 0) {
-        elements.multiSelectFooter.classList.remove('hidden');
-        elements.selectedCount.textContent = `${count} selected`;
-      } else {
-        elements.multiSelectFooter.classList.add('hidden');
+      try {
+        const count = selectedBookmarks.size;
+        if (count > 0) {
+          elements.multiSelectFooter.classList.remove('hidden');
+          elements.selectedCount.textContent = `${count} selected`;
+        } else {
+          elements.multiSelectFooter.classList.add('hidden');
+        }
+      } catch (error) {
+          logError(error, 'updateMultiSelectFooter');
       }
     }
     
@@ -566,12 +1340,96 @@
      * @param {boolean} isChecked - The new checked state.
      */
     function handleCheckboxChange(id, isChecked) {
-      if (isChecked) {
-        selectedBookmarks.add(id);
-      } else {
-        selectedBookmarks.delete(id);
+      try {
+        if (isChecked) {
+          selectedBookmarks.add(id);
+        } else {
+          selectedBookmarks.delete(id);
+        }
+        updateMultiSelectFooter();
+      } catch (error) {
+          logError(error, 'handleCheckboxChange');
       }
-      updateMultiSelectFooter();
+    }
+    
+    /**
+     * Updates the list of recently launched bookmarks.
+     * @param {object} bookmark - The bookmark that was just launched.
+     */
+    function updateRecentLaunches(bookmark) {
+        // Remove if already exists to avoid duplicates and move to top
+        recentLaunches = recentLaunches.filter(b => b.id !== bookmark.id);
+        // Add to the front
+        recentLaunches.unshift(bookmark);
+        // Keep only the top 3
+        recentLaunches = recentLaunches.slice(0, 3);
+        // Save to localStorage
+        try {
+            localStorage.setItem('cloudstax_recent', JSON.stringify(recentLaunches));
+        } catch (e) {
+            logError(e, 'updateRecentLaunches:localStorage');
+        }
+        // Re-render the list if standby mode is active
+        if (!elements.standbyPanel.classList.contains('hidden')) {
+            renderRecentLinks();
+        }
+    }
+    
+    /**
+     * Renders the recent links in the standby panel.
+     */
+    function renderRecentLinks() {
+        elements.recentLinksList.innerHTML = '';
+        if (recentLaunches.length === 0) {
+            elements.recentLinksList.innerHTML = '<p class="text-xs text-gray-500 text-center">No recent links.</p>';
+            return;
+        }
+        
+        recentLaunches.forEach(bookmark => {
+            const item = document.createElement('button');
+            item.className = 'w-full flex items-center gap-2 p-2 bg-gray-800 rounded-md hover:bg-gray-700 transition';
+            item.title = `Launch ${sanitize(bookmark.name)}\n${sanitize(bookmark.url)}`;
+            item.innerHTML = `
+                <img src="${sanitize(bookmark.icon)}"
+                     class="w-6 h-6 rounded-md flex-shrink-0" 
+                     alt=""
+                     onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239ca3af%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 class=%22lucide lucide-globe%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22/><path d=%22M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20%22/><path d=%22M2 12h20%22/></svg>'">
+                <span class="text-sm text-gray-200 truncate">${sanitize(bookmark.name)}</span>
+            `;
+            
+            item.addEventListener('click', () => {
+                if (bookmark.openExternal) {
+                    openLinkExternally(bookmark.url);
+                } else {
+                    window.open(bookmark.url, '_blank', 'noopener');
+                }
+            });
+            
+            elements.recentLinksList.appendChild(item);
+        });
+    }
+    
+    /**
+     * Toggles between the main app and standby mode.
+     * @param {boolean} showStandby - True to show standby, false to show main app.
+     */
+    function toggleStandbyMode(showStandby) {
+        if (showStandby) {
+            // Lazy-load standby animation
+            if (!hasStandbyBeenInitialized) {
+                initStandbyAnimation();
+            }
+            elements.mainAppPanel.classList.add('hidden');
+            elements.standbyPanel.classList.remove('hidden');
+            renderRecentLinks();
+            // This is where you would tell Electron to resize smaller
+            // e.g., window.electron.resize('small');
+        } else {
+            elements.mainAppPanel.classList.remove('hidden');
+            elements.standbyPanel.classList.add('hidden');
+            // This is where you would tell Electron to resize larger
+            // e.g., window.electron.resize('large');
+        }
     }
 
     // --- Data Logic Functions ---
@@ -582,17 +1440,11 @@
     async function loadAllBookmarks() {
       try {
         allBookmarks = await getAllBookmarksFromDB();
-        allBookmarks.sort((a, b) => {
-          const dateA = a.createdAt ? new Date(a.createdAt) : new Date(0);
-          const dateB = b.createdAt ? new Date(b.createdAt) : new Date(0);
-          return dateB - dateA; // Sort by newest first
-        });
-        
-        renderStacks();
-        renderBookmarks();
+        // Sort by custom order first, then creation date
+        allBookmarks.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+        refreshUI();
       } catch (error) {
-        console.error("Failed to load bookmarks:", error);
-        showNotification("Could not load bookmarks.", true);
+        logError(error, 'loadAllBookmarks');
       }
     }
 
@@ -600,40 +1452,44 @@
      * Adds a new bookmark.
      */
     async function addBookmark() {
-      const rawName = elements.nameIn.value;
-      const rawUrl = elements.urlIn.value;
-      let rawStack = elements.stackIn.value.trim();
-
-      if (!rawUrl) {
-        showNotification("URL is required.", true);
-        return;
-      }
-      
-      let normalizedUrl;
-      try {
-        normalizedUrl = normalizeUrl(rawUrl);
-      } catch (e) {
-        showNotification(e.message, true);
-        return;
-      }
-
-      const name = extractNameFromUrl(normalizedUrl, rawName);
-      const stack = rawStack.length > 0 ? (rawStack.charAt(0).toUpperCase() + rawStack.slice(1)) : "General";
-      const icon = getFavicon(normalizedUrl);
-      
-      const newBookmark = {
-        id: crypto.randomUUID(), // Generate a unique ID
-        name,
-        url: normalizedUrl,
-        stack,
-        icon,
-        createdAt: new Date().toISOString() // Store as ISO string
-      };
-      
       elements.addBtn.disabled = true;
       elements.addBtn.textContent = 'Adding...';
-
       try {
+        const rawName = elements.nameIn.value;
+        const rawUrl = elements.urlIn.value;
+        let rawStack = elements.stackIn.value.trim();
+        const openExternal = elements.openExternalIn.checked;
+        const isFavorite = elements.isFavoriteIn.checked;
+
+        if (!rawUrl) {
+          showNotification("URL is required.", true);
+          return;
+        }
+        
+        let normalizedUrl;
+        try {
+          normalizedUrl = normalizeUrl(rawUrl);
+        } catch (e) {
+          showNotification(e.message, true);
+          return;
+        }
+
+        const name = extractNameFromUrl(normalizedUrl, rawName);
+        const stack = rawStack.length > 0 ? (rawStack.charAt(0).toUpperCase() + rawStack.slice(1)) : "General";
+        const icon = getFavicon(normalizedUrl);
+        
+        const newBookmark = {
+          id: crypto.randomUUID(), 
+          name,
+          url: normalizedUrl,
+          stack,
+          icon,
+          openExternal: openExternal,
+          isFavorite: isFavorite,
+          createdAt: new Date().toISOString(), 
+          orderIndex: allBookmarks.length // Add to the end
+        };
+      
         await addBookmarkToDB(newBookmark);
         showNotification("Bookmark added!");
         
@@ -641,279 +1497,930 @@
         elements.nameIn.value = '';
         elements.urlIn.value = '';
         elements.stackIn.value = '';
+        elements.openExternalIn.checked = false;
+        elements.isFavoriteIn.checked = false;
 
-        await loadAllBookmarks(); // Reload and re-render
+        // --- OPTIMIZATION ---
+        // Manually update in-memory state and refresh UI
+        allBookmarks.push(newBookmark);
+        refreshUI();
+        // --- END OPTIMIZATION ---
       } catch (error) {
-        console.error("Error adding document: ", error);
-        showNotification("Failed to add bookmark.", true);
+        logError(error, "addBookmark");
       } finally {
         elements.addBtn.disabled = false;
-        elements.addBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg> Add Bookmark`;
+        elements.addBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg> Add`;
       }
     }
     
     function handleDeleteClick(id) {
-      const bookmark = allBookmarks.find(b => b.id === id);
-      if (!bookmark) return;
+      try {
+        const bookmark = allBookmarks.find(b => b.id === id);
+        if (!bookmark) return;
 
-      const body = `<p>Are you sure you want to delete this bookmark?</p>
-                    <p class="font-medium text-gray-100 mt-2">${sanitize(bookmark.name)}</p>`;
-      
-      const footer = `
-        <button id="cancelDelete" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
-        <button id="confirmDelete" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-md text-sm font-medium transition">Delete</button>
-      `;
-      
-      showModal("Delete Bookmark", body, footer);
-      
-      $('cancelDelete').addEventListener('click', hideModal);
-      $('confirmDelete').addEventListener('click', async () => {
-        try {
-          await deleteBookmarkFromDB(id);
-          selectedBookmarks.delete(id); // Remove from selection if it was selected
-          updateMultiSelectFooter();
-          showNotification("Bookmark deleted.");
-          
-          await loadAllBookmarks(); // Reload and re-render
-        } catch (error) {
-          console.error("Error deleting document: ", error);
-          showNotification("Failed to delete bookmark.", true);
-        } finally {
-          hideModal();
-        }
-      });
+        const body = `<p>Are you sure you want to delete this bookmark?</p>
+                      <p class="font-medium text-gray-100 mt-2">${sanitize(bookmark.name)}</p>`;
+        
+        const footer = `
+          <button id="cancelDelete" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
+          <button id="confirmDelete" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-md text-sm font-medium transition">Delete</button>
+        `;
+        
+        showModal("Delete Bookmark", body, footer);
+        
+        $('cancelDelete').addEventListener('click', hideModal);
+        $('confirmDelete').addEventListener('click', async () => {
+          try {
+            await deleteBookmarkFromDB(id);
+            selectedBookmarks.delete(id);
+            updateMultiSelectFooter();
+            showNotification("Bookmark deleted.");
+            
+            // --- OPTIMIZATION ---
+            allBookmarks = allBookmarks.filter(b => b.id !== id);
+            refreshUI();
+            // --- END OPTIMIZATION ---
+          } catch (error) {
+            logError(error, "handleDeleteClick:confirm");
+          } finally {
+            hideModal();
+          }
+        });
+      } catch (error) {
+          logError(error, "handleDeleteClick");
+      }
     }
 
     function handleEditClick(id) {
-      const bookmark = allBookmarks.find(b => b.id === id);
-      if (!bookmark) return;
-      
-      const stack = bookmark.stack || bookmark.category || "General";
+      try {
+        const bookmark = allBookmarks.find(b => b.id === id);
+        if (!bookmark) return;
+        
+        const stack = bookmark.stack || bookmark.category || "General";
+        
+        const allStacks = [...new Set(allBookmarks.map(b => b.stack || b.category || "General"))].sort();
+        const datalistHtml = allStacks.map(s => `<option value="${sanitize(s)}"></option>`).join('');
 
-      const body = `
-        <div class="space-y-3">
-          <div>
-            <label class="text-xs text-gray-400">Name</label>
-            <input id="editNameIn" value="${sanitize(bookmark.name)}" class="w-full text-sm bg-gray-700 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        const body = `
+          <div class="space-y-3">
+            <div>
+              <label class="text-xs text-gray-400">Name</label>
+              <input id="editNameIn" value="${sanitize(bookmark.name)}" class="w-full text-sm bg-gray-700 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+              <label class="text-xs text-gray-400">URL</label>
+              <input id="editUrlIn" value="${sanitize(bookmark.url)}" class="w-full text-sm bg-gray-700 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+              <label class="text-xs text-gray-400">Stack</label>
+              <input id="editStackIn" value="${sanitize(stack)}" list="existingStacks" class="w-full text-sm bg-gray-700 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <datalist id="existingStacks">
+                ${datalistHtml}
+              </datalist>
+            </div>
+            <div class="flex items-center pt-2">
+              <input id="editOpenExternalIn" type="checkbox" class="form-checkbox" ${bookmark.openExternal ? 'checked' : ''}>
+              <label for="editOpenExternalIn" class="ml-2 text-sm text-gray-300 select-none">Open in default browser</label>
+            </div>
+            <div class="flex items-center pt-2">
+              <input id="editIsFavoriteIn" type="checkbox" class="form-checkbox" ${bookmark.isFavorite ? 'checked' : ''}>
+              <label for="editIsFavoriteIn" class="ml-2 text-sm text-gray-300 select-none">Favorite</label>
+            </div>
           </div>
-          <div>
-            <label class="text-xs text-gray-400">URL</label>
-            <input id="editUrlIn" value="${sanitize(bookmark.url)}" class="w-full text-sm bg-gray-700 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          </div>
-          <div>
-            <label class="text-xs text-gray-400">Stack</label>
-            <input id="editStackIn" value="${sanitize(stack)}" class="w-full text-sm bg-gray-700 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          </div>
-        </div>
-      `;
-      
-      const footer = `
-        <button id="cancelUpdate" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
-        <button id="confirmUpdate" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition" data-id="${id}">Save Changes</button>
-      `;
+        `;
+        
+        const footer = `
+          <button id="cancelUpdate" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
+          <button id="confirmUpdate" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition" data-id="${id}">Save Changes</button>
+        `;
 
-      showModal("Edit Bookmark", body, footer);
-      
-      $('cancelUpdate').addEventListener('click', hideModal);
-      $('confirmUpdate').addEventListener('click', (e) => updateBookmark(e.target.dataset.id));
+        showModal("Edit Bookmark", body, footer);
+        
+        $('cancelUpdate').addEventListener('click', hideModal);
+        $('confirmUpdate').addEventListener('click', (e) => updateBookmark(e.target.dataset.id));
+      } catch (error) {
+          logError(error, "handleEditClick");
+      }
     }
     
     async function updateBookmark(id) {
-      const rawName = $('editNameIn').value;
-      const rawUrl = $('editUrlIn').value;
-      let rawStack = $('editStackIn').value.trim();
-      
-      let normalizedUrl;
       try {
-        normalizedUrl = normalizeUrl(rawUrl);
-      } catch (e) {
-        showNotification(e.message, true);
-        return;
-      }
+        const bookmark = allBookmarks.find(b => b.id === id);
+        if (!bookmark) return;
       
-      const name = extractNameFromUrl(normalizedUrl, rawName);
-      const stack = rawStack.length > 0 ? (rawStack.charAt(0).toUpperCase() + rawStack.slice(1)) : "General";
-      const icon = getFavicon(normalizedUrl);
-      
-      const updatedData = {
-        ...bookmark, // Preserve ID and createdAt
-        name,
-        url: normalizedUrl,
-        stack,
-        icon
-      };
-      
-      try {
+        const rawName = $('editNameIn').value;
+        const rawUrl = $('editUrlIn').value;
+        let rawStack = $('editStackIn').value.trim();
+        const openExternal = $('editOpenExternalIn').checked; 
+        const isFavorite = $('editIsFavoriteIn').checked;
+        
+        let normalizedUrl;
+        try {
+          normalizedUrl = normalizeUrl(rawUrl);
+        } catch (e) {
+          showNotification(e.message, true);
+          return;
+        }
+        
+        const name = extractNameFromUrl(normalizedUrl, rawName);
+        const stack = rawStack.length > 0 ? (rawStack.charAt(0).toUpperCase() + rawStack.slice(1)) : "General";
+        const icon = getFavicon(normalizedUrl);
+        
+        const updatedData = {
+          ...bookmark, // Preserve ID, createdAt, and orderIndex
+          name,
+          url: normalizedUrl,
+          stack,
+          icon,
+          openExternal: openExternal,
+          isFavorite: isFavorite
+        };
+        
         await updateBookmarkInDB(updatedData);
         showNotification("Bookmark updated!");
-        await loadAllBookmarks(); // Reload and re-render
+        
+        // --- OPTIMIZATION ---
+        const index = allBookmarks.findIndex(b => b.id === id);
+        if (index !== -1) allBookmarks[index] = updatedData;
+        refreshUI();
+        // --- END OPTIMIZATION ---
       } catch (error) {
-        console.error("Error updating document: ", error);
-        showNotification("Failed to update bookmark.", true);
+        logError(error, "updateBookmark");
       } finally {
         hideModal();
       }
     }
     
     /**
+     * Toggles the favorite status of a bookmark.
+     */
+    async function handleToggleFavorite(id) {
+        try {
+            const bookmark = allBookmarks.find(b => b.id === id);
+            if (!bookmark) return;
+
+            bookmark.isFavorite = !bookmark.isFavorite; 
+            
+            const updatedData = {
+                ...bookmark,
+                isFavorite: bookmark.isFavorite
+            };
+            
+            await updateBookmarkInDB(updatedData);
+            // No full reload, just refresh the UI from memory
+            refreshUI();
+            
+        } catch (error) {
+            logError(error, "handleToggleFavorite");
+        }
+    }
+    
+    /**
      * Handles launching all selected bookmarks.
      */
     function launchSelected() {
-      if (selectedBookmarks.size === 0) return;
+      try {
+        if (selectedBookmarks.size === 0) return;
+        
+        let launchedCount = 0;
+        
+        selectedBookmarks.forEach(id => {
+          const bookmark = allBookmarks.find(b => b.id === id);
+          if (bookmark) {
+            updateRecentLaunches(bookmark); // Update recent for each
+            if (bookmark.openExternal) {
+              openLinkExternally(bookmark.url);
+            } else {
+              window.open(bookmark.url, '_blank', 'noopener');
+            }
+            launchedCount++;
+          }
+        });
+        
+        showNotification(`Launched ${launchedCount} bookmarks.`);
+        
+        // Clear selection
+        selectedBookmarks.clear();
+        document.querySelectorAll('.bookmark-checkbox:checked').forEach(cb => cb.checked = false);
+        updateMultiSelectFooter();
+      } catch (error) {
+          logError(error, "launchSelected");
+      }
+    }
+
+    /**
+     * Parses an HTML page to find all <a> tags and extract their hrefs.
+     * @param {string} htmlString - The string content of the HTML page.
+     * @param {string} stackName - The name of the stack to assign.
+     * @param {string} [baseUrl] - The base URL for resolving relative links.
+     * @returns {Array} An array of bookmark objects.
+     */
+    function parseLinksFromHtml(htmlString, stackName, baseUrl) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlString, 'text/html');
+      const links = doc.querySelectorAll('a');
+      const bookmarks = [];
+      const base = baseUrl; // This is now correct, it's either the remote URL or undefined
+      const currentCount = allBookmarks.length;
       
-      let launchedCount = 0;
-      selectedBookmarks.forEach(id => {
-        const bookmark = allBookmarks.find(b => b.id === id);
-        if (bookmark) {
-          window.open(bookmark.url, '_blank', 'noopener');
-          launchedCount++;
+      links.forEach((link, index) => {
+        const url = link.getAttribute('href');
+        const name = link.textContent.trim();
+        
+        if (url && url !== '#' && !url.startsWith('javascript:')) {
+          try {
+            // If base is provided, resolve relative URLs. If not, use the URL as-is.
+            const absoluteUrl = base ? new URL(url, base).href : url;
+            const normalizedUrl = normalizeUrl(absoluteUrl);
+            
+            bookmarks.push({
+              name: extractNameFromUrl(normalizedUrl, name || absoluteUrl),
+              url: normalizedUrl,
+              stack: stackName,
+              icon: getFavicon(normalizedUrl),
+              openExternal: false,
+              isFavorite: false,
+              createdAt: new Date().toISOString(),
+              id: crypto.randomUUID(),
+              orderIndex: currentCount + index // Add orderIndex to the end
+            });
+          } catch (e) {
+            logError(e, `parseLinksFromHtml (Skipped URL: ${url})`);
+          }
         }
       });
       
-      showNotification(`Launched ${launchedCount} bookmarks.`);
+      return bookmarks;
+    }
+    
+    /**
+     * Shows a small modal to quickly paste and grab a link.
+     */
+    function handleQuickGrabModal() {
+      const body = `
+        <p class="text-sm text-gray-300 mb-2">Paste your link below and press Enter.</p>
+        <input id="quickGrabInput" class="w-full text-sm bg-gray-900 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://...">
+      `;
+      const footer = `
+        <button id="cancelQuickGrab" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
+        <button id="confirmQuickGrab" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">Grab Link</button>
+      `;
       
-      // Clear selection
-      selectedBookmarks.clear();
-      document.querySelectorAll('.bookmark-checkbox:checked').forEach(cb => cb.checked = false);
-      updateMultiSelectFooter();
+      showModal("Quick Grab", body, footer);
+      
+      const input = $('quickGrabInput');
+      input.focus(); // Auto-focus the input
+      
+      const grabFunc = async () => {
+        const text = input.value;
+        if (await processQuickGrabPaste(text)) {
+            hideModal(); // Only hide on success
+        } else {
+            showNotification("No valid link found.", true);
+            input.focus();
+            input.select();
+        }
+      };
+      
+      $('cancelQuickGrab').addEventListener('click', hideModal);
+      $('confirmQuickGrab').addEventListener('click', grabFunc);
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            grabFunc();
+        }
+      });
+    }
+    
+    /**
+     * Helper function to process a single-link grab
+     * @param {string} text - The string from the clipboard
+     * @param {string} [stackName="Quick Stack"] - The stack to add links to
+     * @returns {boolean} - True if successful, false if not
+     */
+     async function processQuickGrabPaste(text, stackName = "Quick Stack") {
+        if (!text || !text.trim()) {
+            return false;
+        }
+
+        const lines = text.split('\n').filter(line => line.trim().length > 0);
+        if (lines.length === 0) {
+            return false;
+        }
+
+        let addedCount = 0;
+        let failedCount = 0;
+        
+        // Only process the first valid link found.
+        const lineToProcess = lines[0];
+
+        let normalizedUrl;
+        try {
+            normalizedUrl = normalizeUrl(lineToProcess);
+        } catch (e) {
+            logError(e, `processQuickGrab (Skipped: ${lineToProcess})`);
+            failedCount++;
+            return false; // Failed
+        }
+
+        const name = extractNameFromUrl(normalizedUrl, '');
+        const stack = stackName; // Use the parameter
+        const icon = getFavicon(normalizedUrl);
+        
+        const newBookmark = {
+            id: crypto.randomUUID(),
+            name,
+            url: normalizedUrl,
+            stack,
+            icon,
+            openExternal: false,
+            isFavorite: false,
+            createdAt: new Date().toISOString(),
+            orderIndex: allBookmarks.length // Add to the end
+        };
+
+        try {
+            await addBookmarkToDB(newBookmark);
+            addedCount++;
+        } catch (error) {
+            logError(error, `processQuickGrab (Failed to add: ${lineToProcess})`);
+            failedCount++;
+        }
+
+        if (addedCount > 0) {
+            showNotification(`Added 1 bookmark to ${stackName}.`);
+            // --- OPTIMIZATION ---
+            allBookmarks.push(newBookmark);
+            refreshUI();
+            // --- END OPTIMIZATION ---
+        }
+        if (failedCount > 0) {
+            showNotification(`Link failed to import. Check log.`, true);
+        }
+        
+        return addedCount > 0;
+    }
+
+    /**
+     * Handles the Install Tools button click
+     */
+    async function handleInstallTools() {
+      const toolsUrl = 'https://junkyardai.github.io/Cloudstax-Default-Tools/';
+      
+      // Show confirmation modal first
+      const body = `
+        <p class="text-sm text-gray-300">This will install the default Cloudstax tools from:</p>
+        <p class="text-sm text-blue-400 truncate my-2">${sanitize(toolsUrl)}</p>
+        <p class="text-sm text-gray-300">They will be added to a new stack called "Cloudstax Tools".</p>
+      `;
+      const footer = `
+        <button id="cancelInstall" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
+        <button id="confirmInstall" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">Confirm Install</button>
+      `;
+      
+      showModal("Install Cloudstax Tools", body, footer);
+      
+      $('cancelInstall').addEventListener('click', hideModal);
+      $('confirmInstall').addEventListener('click', async () => {
+        try {
+          // Original logic is now inside the confirmation
+          const confirmBtn = $('confirmInstall');
+          confirmBtn.disabled = true;
+          confirmBtn.textContent = 'Installing...';
+
+          const response = await fetch(toolsUrl);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status} - Could not fetch tools from ${toolsUrl}`);
+          }
+          const htmlText = await response.text();
+          
+          const bookmarksToImport = parseLinksFromHtml(htmlText, "Cloudstax Tools", toolsUrl);
+
+          if (bookmarksToImport.length > 0) {
+             await batchImportToDB(bookmarksToImport);
+             showNotification(`Successfully installed ${bookmarksToImport.length} tools.`);
+             await loadAllBookmarks(); // Full reload is correct here for batch import
+          } else {
+            showNotification('Tools file was empty or no valid links were found.', true);
+          }
+        } catch (error) {
+          logError(error, 'handleInstallTools');
+        } finally {
+          hideModal(); // Close modal after success or failure
+        }
+      });
     }
     
     /**
      * Handles exporting bookmarks to a JSON file.
      */
     function exportBookmarks() {
-      if (allBookmarks.length === 0) {
-        showNotification("No bookmarks to export.", true);
-        return;
-      }
-      
-      // Create a cleaner export format
-      const exportData = allBookmarks.map(b => ({
-        name: b.name,
-        url: b.url,
-        stack: b.stack || b.category || "General",
-        createdAt: b.createdAt?.toDate ? b.createdAt.toDate().toISOString() : new Date().toISOString()
-      }));
-      
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
-      const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", `cloudstax_export_${new Date().toISOString().split('T')[0]}.json`);
-      document.body.appendChild(downloadAnchor); // required for firefox
-      downloadAnchor.click();
-      downloadAnchor.remove();
-      
-      showNotification("Bookmarks exported.");
-    }
-
-    /**
-     * Handles importing bookmarks from a JSON file.
-     */
-    function importBookmarks() {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.json,application/json';
-      input.onchange = e => {
-        const file = e.target.files[0];
-        if (!file) return;
+      try {
+        if (allBookmarks.length === 0) {
+          showNotification("No bookmarks to export.", true);
+          return;
+        }
         
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          try {
-            const importedData = JSON.parse(event.target.result);
-            if (!Array.isArray(importedData)) {
-              throw new Error("Invalid format. Expected a JSON array.");
-            }
-            
-            const validBookmarks = importedData.filter(b => b.name && b.url).map(b => ({
-              name: b.name,
-              url: normalizeUrl(b.url), // Normalize URL on import
-              stack: b.stack || b.category || "General",
-              icon: getFavicon(normalizeUrl(b.url)),
-              createdAt: b.createdAt ? new Date(b.createdAt).toISOString() : new Date().toISOString(),
-              id: crypto.randomUUID() // Assign a new ID on import
-            }));
-
-            if (validBookmarks.length === 0) {
-              showNotification("No valid bookmarks found in file.", true);
-              return;
-            }
-
-            confirmImport(validBookmarks);
-            
-          } catch (error) {
-            console.error("Import error:", error);
-            showNotification(`Import failed: ${error.message}`, true);
-          }
-        };
-        reader.readAsText(file);
-      };
-      input.click();
+        // Create a cleaner export format
+        const exportData = allBookmarks.map(b => ({
+          name: b.name,
+          url: b.url,
+          stack: b.stack || "General",
+          openExternal: b.openExternal || false,
+          isFavorite: b.isFavorite || false,
+          createdAt: b.createdAt,
+          orderIndex: b.orderIndex
+        }));
+        
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", `cloudstax_backup_${new Date().toISOString().split('T')[0]}.json`);
+        document.body.appendChild(downloadAnchor); // required for firefox
+        downloadAnchor.click();
+        downloadAnchor.remove();
+        
+        showNotification("Bookmarks exported.");
+      } catch (error) {
+        logError(error, 'exportBookmarks');
+      }
     }
     
     /**
-     * Shows a confirmation modal before batch-importing bookmarks.
-     * @param {Array} bookmarks - The array of validated bookmark objects to import.
+     * Handles importing a Stack Preset HTML file.
      */
-    function confirmImport(bookmarks) {
-      const body = `<p>Are you sure you want to import ${bookmarks.length} bookmarks? This will add them to your existing collection.</p>`;
-      
-      const footer = `
-        <button id="cancelImport" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
-        <button id="confirmImport" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">Import</button>
-      `;
-      
-      showModal(`Import ${bookmarks.length} Bookmarks`, body, footer);
-      
-      $('cancelImport').addEventListener('click', hideModal);
-      $('confirmImport').addEventListener('click', async () => {
-        try {
-          const importCount = await batchImportToDB(bookmarks);
-          showNotification(`Successfully imported ${importCount} bookmarks.`);
-          await loadAllBookmarks(); // Reload and re-render
-        } catch (error) {
-          console.error("Error batch writing documents: ", error);
-          showNotification("Failed to import bookmarks.", true);
-        } finally {
-          hideModal();
-        }
-      });
+    function handleImportStackPreset() {
+        // 1. Ask for stack name
+        const body = `
+            <p class="text-sm text-gray-300 mb-2">Please enter a name for this new stack (e.g., "Design Tools").</p>
+            <input id="importStackName" class="w-full text-sm bg-gray-900 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="New Stack Name">
+        `;
+        const footer = `
+            <button id="cancelImport" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
+            <button id="nextImport" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">Next</button>
+        `;
+        showModal("Import Stack Preset", body, footer);
+        
+        const input = $('importStackName');
+        input.focus();
+        
+        $('cancelImport').addEventListener('click', hideModal);
+        $('nextImport').addEventListener('click', () => {
+            const stackName = input.value.trim();
+            if (!stackName) {
+                showNotification("Stack name is required.", true);
+                return;
+            }
+            hideModal(); // Close this modal
+            
+            // 2. Open file picker
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = '.html,text/html';
+            fileInput.onchange = e => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const htmlText = event.target.result;
+                        // Pass stackName, but no baseUrl since it's a local file
+                        const bookmarksToImport = parseLinksFromHtml(htmlText, stackName); 
+
+                        if (bookmarksToImport.length > 0) {
+                           await batchImportToDB(bookmarksToImport);
+                           showNotification(`Successfully imported ${bookmarksToImport.length} links to "${stackName}".`);
+                           await loadAllBookmarks(); // Full reload is correct here
+                        } else {
+                          showNotification('File was empty or no valid links were found.', true);
+                        }
+                    } catch (error) {
+                        logError(error, 'handleImportStackPreset:fileread');
+                    }
+                };
+                reader.readAsText(file);
+            };
+            fileInput.click();
+        });
     }
+    
+    // --- Stack Creator Functions (adapted from CLL.html) ---
+    
+    function stackCreator_load() {
+        try { return JSON.parse(localStorage.getItem(CREATOR_KEY)) || []; } catch(e) { return []; }
+    }
+    function stackCreator_save(arr) {
+        localStorage.setItem(CREATOR_KEY, JSON.stringify(arr));
+        stackCreator_render();
+    }
+    function stackCreator_inferName(url) {
+        try {
+            const u = new URL(url);
+            return u.hostname.replace(/^www\./,'');
+        } catch(e) { return url; }
+    }
+    function stackCreator_parseInput(text) {
+        text = (text||'').trim();
+        if(!text) return null;
+        const parts = text.split(/\s*-\s*/);
+        if(parts.length === 1){
+            const maybeUrl = parts[0];
+            const url = maybeUrl.match(/^https?:\/\//i) ? maybeUrl : 'https://' + maybeUrl;
+            return {name: stackCreator_inferName(url), href: url};
+        } else {
+            const name = parts.slice(0, -1).join(' - ') || parts[0];
+            let href = parts[parts.length-1];
+            href = href.match(/^https?:\/\//i) ? href : 'https://' + href;
+            return {name: name.trim() || stackCreator_inferName(href), href: href.trim()};
+        }
+    }
+    function stackCreator_addFromInput(str) {
+        const entry = stackCreator_parseInput(str);
+        if(!entry) return;
+        const arr = stackCreator_load();
+        arr.push(entry);
+        stackCreator_save(arr);
+    }
+    function stackCreator_removeIndex(i) {
+        const arr = stackCreator_load();
+        arr.splice(i,1);
+        stackCreator_save(arr);
+    }
+    function stackCreator_moveUp(i) {
+        if(i<=0) return;
+        const arr = stackCreator_load();
+        const a = arr.splice(i,1)[0];
+        arr.splice(i-1,0,a);
+        stackCreator_save(arr);
+    }
+    function stackCreator_moveDown(i) {
+        const arr = stackCreator_load();
+        if(i>=arr.length-1) return;
+        const a = arr.splice(i,1)[0];
+        arr.splice(i+1,0,a);
+        stackCreator_save(arr);
+    }
+    function stackCreator_render() {
+        const listEl = $('stackCreatorList');
+        if (!listEl) return; // Modal not open
+        
+        const arr = stackCreator_load();
+        listEl.innerHTML = '';
+        arr.forEach((it, idx) => {
+            const li = document.createElement('li');
+            const left = document.createElement('div');
+            left.style.minWidth = '0';
+            left.innerHTML = `<div class="creator-anchor" title="${escapeAttr(it.name)}">${escapeHtml(it.name)}</div> <div class="creator-meta" title="${escapeAttr(it.href)}">${escapeHtml(it.href)}</div>`;
+            li.appendChild(left);
+            
+            const actions = document.createElement('div');
+            actions.className = 'creator-actions';
+            actions.style.display = 'flex';
+            actions.style.gap = '6px';
+            actions.style.flexShrink = '0';
+            const up = document.createElement('button'); up.textContent = '↑'; up.onclick = () => stackCreator_moveUp(idx);
+            const down = document.createElement('button'); down.textContent = '↓'; down.onclick = () => stackCreator_moveDown(idx);
+            const del = document.createElement('button'); del.textContent = '✕'; del.className = 'creator-delete'; del.onclick = () => stackCreator_removeIndex(idx);
+            actions.appendChild(up); actions.appendChild(down); actions.appendChild(del);
+            li.appendChild(actions);
+            listEl.appendChild(li);
+        });
+        if(arr.length===0){
+            listEl.innerHTML = '<li class="creator-meta" style="background:transparent;">No links yet. Paste a link and press Enter.</li>';
+        }
+    }
+    function stackCreator_handleExport() {
+        const arr = stackCreator_load();
+        const html = ['<!doctype html>','<html>','  <head>','    <meta charset="utf-8" />','    <title>Cloudstax-Links</title>','  </head>','  <body>']
+          .concat(arr.map(it => `    <a href="${escapeAttr(it.href)}">${escapeHtml(it.name)}</a>`))
+          .concat(['  </body>','</html>']).join('\n');
+        const blob = new Blob([html], {type:'text/html'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'Cloudstax-Links.html';
+        document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+    function stackCreator_handleClear() {
+        // Using a simpler prompt since we're in a modal
+        if (stackCreator_load().length > 0 && !confirm('Clear all links in the creator?')) return;
+        localStorage.removeItem(CREATOR_KEY);
+        stackCreator_render();
+    }
+    function stackCreator_handlePaste(e) {
+        const text = (e.clipboardData || window.clipboardData).getData('text');
+        if(text && /\r|\n/.test(text)){
+            e.preventDefault();
+            const lines = text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+            lines.forEach(l => stackCreator_addFromInput(l));
+            e.target.value = '';
+        }
+    }
+    function stackCreator_handleKeydown(e) {
+        if(e.key === 'Enter'){
+            e.preventDefault();
+            const input = e.target;
+            const v = input.value.trim();
+            if(!v) return;
+            stackCreator_addFromInput(v);
+            input.value = '';
+        }
+    }
+    
+    /**
+     * Shows the "Create Stack Preset" modal.
+     */
+    function handleShowStackCreator() {
+        const body = `
+            <p class="text-sm text-gray-300 mb-2">Add links to create a shareable HTML preset file.</p>
+            <p class="text-xs text-gray-400 mb-3">You can paste <code>https://site.com</code> or <code>Name - https://site.com</code>. Paste multiple lines at once to bulk-add.</p>
+            
+            <div class="flex gap-2">
+                <input id="stackCreatorInput" type="text" placeholder="Paste URL or 'Name - https://example.com' and press Enter">
+            </div>
+            
+            <ul id="stackCreatorList"></ul>
+        `;
+        const footer = `
+            <button id="creatorExport" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">Export HTML</button>
+            <button id="creatorClear" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-md text-sm font-medium transition">Clear List</button>
+            <button id="creatorClose" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Close</button>
+        `;
+        
+        showModal("Create Stack Preset", body, footer);
+        
+        // Init the creator logic
+        stackCreator_render();
+        
+        // Add listeners
+        $('stackCreatorInput').addEventListener('keydown', stackCreator_handleKeydown);
+        $('stackCreatorInput').addEventListener('paste', stackCreator_handlePaste);
+        $('creatorExport').addEventListener('click', stackCreator_handleExport);
+        $('creatorClear').addEventListener('click', stackCreator_handleClear);
+        $('creatorClose').addEventListener('click', hideModal);
+    }
+    
+    /**
+     * Shows the main settings modal.
+     */
+    function handleShowSettings() {
+        // --- Stack Icon Section Builder ---
+        const allStacks = [...new Set(allBookmarks.map(b => b.stack || "General"))].sort();
+        const iconOptions = STACK_ICON_LIST.map(icon => 
+            `<option value="${icon}">${icon || 'None'}</option>`
+        ).join('');
+        
+        let stackIconHtml = '<div id="stackIconList" class="space-y-2">';
+        if (allStacks.length > 0) {
+            stackIconHtml += allStacks.map(stack => {
+                const currentIcon = stackIcons.get(stack) || '';
+                return `
+                <div class="stack-icon-item">
+                    <label for="icon-select-${sanitize(stack)}">${sanitize(stack)}</label>
+                    <select id="icon-select-${sanitize(stack)}"
+                           data-stack-name="${sanitize(stack)}"
+                           class="stack-icon-select">
+                        ${iconOptions.replace(`value="${currentIcon}"`, `value="${currentIcon}" selected`)}
+                    </select>
+                </div>
+            `}).join('');
+        } else {
+            stackIconHtml += '<p class="text-sm text-gray-400">No stacks created yet.</p>';
+        }
+        stackIconHtml += '</div>';
+        
+        const chevron = `<svg class="settings-chevron w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>`;
+        
+        const body = `
+            <div class="settings-section">
+                <button class="settings-section-title" data-target="content-app-tools">
+                    <span>App Tools</span>
+                    ${chevron}
+                </button>
+                <div id="content-app-tools" class="settings-section-content hidden">
+                    <p class="settings-section-desc">Install the default set of Cloudstax tools.</p>
+                    <button id="modalInstallTools" class="w-full text-left px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-package"><path d="M16.5 9.4 7.5 4.6"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+                        Install Cloudstax Tools
+                    </button>
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <button class="settings-section-title" data-target="content-stack-icons">
+                    <span>Stack Customization</span>
+                    ${chevron}
+                </button>
+                <div id="content-stack-icons" class="settings-section-content hidden">
+                    <p class="settings-section-desc">
+                        Assign a simple icon or emoji to your stacks for easier identification.
+                    </p>
+                    ${stackIconHtml}
+                    <button id="modalSaveIcons" class="mt-3 w-full text-left px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition flex items-center gap-2 justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-save"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13H7v8"/><polyline points="7 3 7 8H15"/></svg>
+                        Save Icons
+                    </button>
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <button class="settings-section-title" data-target="content-stack-sharing">
+                    <span>Stack Sharing</span>
+                    ${chevron}
+                </button>
+                <div id="content-stack-sharing" class="settings-section-content hidden">
+                    <p class="settings-section-desc">
+                        Create your own shareable stack file, or import one from a friend.
+                    </p>
+                    <div class="flex gap-3">
+                        <button id="modalImportStack" class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2 justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-input"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M2 15h10"/><path d="m5 12-3 3 3 3"/></svg>
+                            Import Stack
+                        </button>
+                        <button id="modalCreateStack" class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2 justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus-square"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+                            Create Stack
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <button class="settings-section-title" data-target="content-diagnostics">
+                    <span>Diagnostics</span>
+                    ${chevron}
+                </button>
+                <div id="content-diagnostics" class="settings-section-content hidden">
+                    <button id="modalViewLog" class="w-full text-left px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bug"><path d="M8 2a3 3 0 0 0-3 3v1H4a2 2 0 0 0-2 2v2a3 3 0 0 0 3 3h1v1a3 3 0 0 0 3 3h4a3 3 0 0 0 3-3v-1h1a3 3 0 0 0 3-3V8a2 2 0 0 0-2-2h-1V5a3 3 0 0 0-3-3H8Zm6 12v-2"/><path d="M8 14v-2"/><path d="M8 10h8"/><path d="M16 6H8"/><path d="m12 18 2-3h-4l2 3"/></svg>
+                        View Error Log
+                    </button>
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <button class="settings-section-title" data-target="content-data-mgmt">
+                    <span>Data Management</span>
+                    ${chevron}
+                </button>
+                <div id="content-data-mgmt" class="settings-section-content hidden">
+                    <p class="settings-section-desc">
+                        Save a backup of all your bookmarks to a JSON file. You can use this file to restore your data later.
+                    </p>
+                    <button id="modalExportData" class="w-full text-left px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-output"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M22 15h-10"/><path d="m19 12-3 3 3 3"/></svg>
+                        Export to JSON
+                    </button>
+                </div>
+            </div>
+        `;
+        const footer = `
+            <button id="closeSettings" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Close</button>
+        `;
+        
+        showModal("Settings", body, footer);
+        
+        // Listeners are now attached to modalBody in initialize()
+    }
+    
+    /**
+     * Handles all clicks inside the modal for event delegation.
+     * @param {Event} e - The click event.
+     */
+    function handleModalClicks(e) {
+        const target = e.target;
+        
+        // Accordion Toggle
+        const accordionToggle = target.closest('.settings-section-title');
+        if (accordionToggle) {
+            const targetId = accordionToggle.dataset.target;
+            const targetContent = $(targetId);
+            const chevron = accordionToggle.querySelector('.settings-chevron');
+            if (targetContent) {
+                targetContent.classList.toggle('hidden');
+                chevron.classList.toggle('rotated');
+            }
+            return;
+        }
+
+        // Button Clicks
+        const button = target.closest('button');
+        if (!button) return;
+
+        switch(button.id) {
+            case 'closeSettings':
+                hideModal();
+                break;
+            case 'modalInstallTools':
+                hideModal();
+                handleInstallTools();
+                break;
+            case 'modalImportStack':
+                hideModal();
+                handleImportStackPreset();
+                break;
+            case 'modalCreateStack':
+                hideModal();
+                handleShowStackCreator();
+                break;
+            case 'modalViewLog':
+                hideModal();
+                handleViewLog();
+                break;
+            case 'modalExportData':
+                exportBookmarks();
+                break;
+            case 'modalSaveIcons':
+                const newIconMap = new Map();
+                document.querySelectorAll('.stack-icon-select').forEach(select => {
+                    const stackName = select.dataset.stackName;
+                    const icon = select.value;
+                    if (stackName) { 
+                        newIconMap.set(stackName, icon);
+                    }
+                });
+                saveStackIcons(newIconMap);
+                showNotification("Stack icons saved!");
+                refreshUI();
+                break;
+        }
+    }
+
 
     // --- Initialization ---
 
     async function initialize() {
       try {
-        // 1. Initialize the local database
+        // 1. Initialize the 3D Logos
+        initThreeJSAnimation();
+        // Standby animation is now lazy-loaded
+          
+        // 2. Initialize the local database
         await initDB();
         
-        // 2. Load all bookmarks from the DB
-        await loadAllBookmarks();
-
+        // 3. Load recent launches
+        recentLaunches = JSON.parse(localStorage.getItem('cloudstax_recent')) || [];
+        
+        // 4. Load stack icons
+        loadStackIcons();
+        
+        // 5. Load all bookmarks from the DB
+        await loadAllBookmarks(); // This now calls refreshUI()
+ 
       } catch (error) {
-        console.error("Initialization failed:", error);
-        elements.loadingIndicator.textContent = "Error: Application failed to initialize.";
+        logError(error, "initialize");
+        elements.loadingIndicator.textContent = "Error: Application failed to initialize. Check log.";
         return;
       }
 
-      // 3. Add DOM Event Listeners
+      // 6. Add DOM Event Listeners
       elements.addBtn.addEventListener('click', addBookmark);
       elements.urlIn.addEventListener('keydown', e => e.key === 'Enter' && addBookmark());
       elements.nameIn.addEventListener('keydown', e => e.key === 'Enter' && addBookmark());
       elements.stackIn.addEventListener('keydown', e => e.key === 'Enter' && addBookmark());
       
-      elements.searchIn.addEventListener('input', renderBookmarks);
-      elements.stackFilter.addEventListener('change', renderBookmarks);
+      // Debounced search input
+      elements.searchIn.addEventListener('input', debounce(() => { 
+        currentPage = 1; 
+        renderBookmarks(); 
+      }, 250));
+      
+      elements.stackFilter.addEventListener('change', () => { 
+        currentPage = 1;
+        // If in reorder mode, toggle it off when changing filter
+        if (isReorderMode) {
+            handleReorderToggle(); // This will also call renderBookmarks
+        } else {
+            renderBookmarks();
+        }
+      });
       
       elements.launchSelectedBtn.addEventListener('click', launchSelected);
-      elements.importBtn.addEventListener('click', importBookmarks);
-      elements.exportBtn.addEventListener('click', exportBookmarks);
+      elements.quickGrabBtn.addEventListener('click', handleQuickGrabModal); 
+      elements.settingsBtn.addEventListener('click', handleShowSettings);
+      elements.reorderBtn.addEventListener('click', handleReorderToggle); 
+      
+      // Standby listeners
+      elements.standbyBtn.addEventListener('click', () => toggleStandbyMode(true));
+      elements.openAppBtn.addEventListener('click', () => toggleStandbyMode(false));
+      
+      // Modal event delegation
+      elements.modalBody.addEventListener('click', handleModalClicks);
+      elements.modalFooter.addEventListener('click', handleModalClicks); // <-- FIX: Listen for clicks in the footer too
     }
+    
+    // --- Global Error Handlers ---
+    window.onerror = function(message, source, lineno, colno, error) {
+      logError(error || { message: message }, `Global Uncaught\nSource: ${source} @ ${lineno}:${colno}`);
+      return true; // Prevents the default browser error console
+    };
+
+    window.onunhandledrejection = function(event) {
+      logError(event.reason || { message: 'Unhandled promise rejection' }, 'Global Unhandled Rejection');
+    };
 
     document.addEventListener('DOMContentLoaded', initialize);
 
   </script>
 </body>
 </html>
-
-
