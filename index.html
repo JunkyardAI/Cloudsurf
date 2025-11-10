@@ -9,7 +9,7 @@
   <!-- Load Three.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <!-- Load Inter font -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display.swap" rel="stylesheet">
   <style>
     body {
       font-family: 'Inter', sans-serif;
@@ -310,6 +310,28 @@
     #stackCreatorList .creator-actions .creator-delete:hover {
         background: #dc2626; /* red-600 */
     }
+    
+    /* --- NEW: Compact View Styles --- */
+    #bookmarksView.compact-mode .bookmark-item {
+        padding: 0.5rem 0.75rem; /* p-2 px-3 */
+        gap: 0.5rem; /* gap-2 */
+    }
+    #bookmarksView.compact-mode .bookmark-item img {
+        width: 1.75rem; /* w-7 */
+        height: 1.75rem; /* h-7 */
+    }
+    #bookmarksView.compact-mode .drag-handle {
+        margin-top: 0;
+    }
+    #bookmarksView.compact-mode .bookmark-checkbox {
+        margin-top: 0.125rem; /* mt-0.5 */
+    }
+    #bookmarksView.compact-mode .text-sm {
+        font-weight: 400; /* normal */
+    }
+    #bookmarksView.compact-mode .text-xs {
+        /* Keep text-xs */
+    }
   </style>
 </head>
 <body class="h-full bg-gray-950 text-gray-100 md:flex md:items-center md:justify-center md:p-4">
@@ -328,6 +350,10 @@
           <h1 class="text-base font-semibold">Cloudstax</h1>
           <p class="text-xs text-gray-400">Create Your Own Sites Stacks!</p>
         </div>
+        <!-- *** NEW: Link Mode Toggle Button *** -->
+        <button id="linkModeBtn" class="p-2 text-gray-400 hover:text-white transition" title="Set Link Behavior">
+            <!-- Icon will be set by JS -->
+        </button>
         <!-- Standby Button -->
         <button id="standbyBtn" class="p-2 text-gray-400 hover:text-white transition" title="Enter Standby Mode">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-minimize-2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" x2="21" y1="10" y2="3"/><line x1="3" x2="10" y1="21" y2="14"/></svg>
@@ -470,8 +496,9 @@
     const DB_VERSION = 1; 
     const STORE_NAME = 'bookmarks';
     const STACK_ICONS_KEY = 'cloudstax_stack_icons';
-    // --- NEW: Key for global open mode ---
     const CLOUDSTAX_OPEN_MODE_KEY = 'cloudstax_open_mode';
+    // --- NEW: Key for compact view ---
+    const CLOUDSTAX_COMPACT_VIEW_KEY = 'cloudstax_compact_view';
 
     // --- Global State ---
     let db; // IndexedDB instance
@@ -484,8 +511,9 @@
     let dragSrcEl = null; // For drag/drop
     let recentLaunches = []; // For Standby Mode
     let stackIcons = new Map(); // For Stack Icons
-    // --- NEW: Global open mode state ---
     let globalOpenMode = 'default'; // 'default', 'force-external', 'force-internal'
+    // --- NEW: Compact view state ---
+    let isCompactView = false; // default to false
     let hasStandbyBeenInitialized = false; // For standby animation performance
     let searchDebounceTimer; // For debouncing search input
     
@@ -510,6 +538,7 @@
       searchIn: $('searchIn'),
       stackFilter: $('stackFilter'),
       bookmarksList: $('bookmarksList'),
+      bookmarksView: $('bookmarksView'), // --- NEW: Added for compact view ---
       loadingIndicator: $('loadingIndicator'),
       modal: $('modal'),
       modalTitle: $('modalTitle'),
@@ -526,6 +555,7 @@
       reorderBtn: $('reorderBtn'), 
       paginationControls: $('paginationControls'), 
       mainStackDatalist: $('mainStackDatalist'),
+      linkModeBtn: $('linkModeBtn'), // --- NEW: Link mode button ---
       // Standby Mode Elements
       mainAppPanel: $('mainAppPanel'),
       standbyPanel: $('standbyPanel'),
@@ -992,7 +1022,7 @@
         }
     }
     
-    // --- NEW: Link Behavior Functions ---
+    // --- Link Behavior Functions ---
     
     /**
      * Loads the global link open mode from localStorage.
@@ -1020,9 +1050,85 @@
                 globalOpenMode = mode;
                 localStorage.setItem(CLOUDSTAX_OPEN_MODE_KEY, mode);
                 showNotification("Link behavior saved!");
+                updateLinkModeBtnIcon(); // --- NEW: Update icon on save
             }
         } catch (error) {
             logError(error, 'saveOpenMode');
+        }
+    }
+    
+    /**
+     * --- NEW FUNCTION ---
+     * Cycles through the 3 link behavior modes.
+     */
+    function toggleLinkMode() {
+        let newMode = 'default';
+        if (globalOpenMode === 'default') {
+            newMode = 'force-external';
+        } else if (globalOpenMode === 'force-external') {
+            newMode = 'force-internal';
+        } else { // force-internal
+            newMode = 'default';
+        }
+        saveOpenMode(newMode); 
+        
+        // Update radio buttons in settings modal if it's open
+        const openRadio = document.querySelector(`input[name="link-behavior"][value="${newMode}"]`);
+        if (openRadio) {
+            openRadio.checked = true;
+        }
+    }
+    
+    /**
+     * --- NEW FUNCTION ---
+     * Updates the header button icon based on the global link mode.
+     */
+    function updateLinkModeBtnIcon() {
+        let iconHtml = '';
+        let title = '';
+        const baseSvg = (paths) => `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+        
+        if (globalOpenMode === 'default') {
+            iconHtml = baseSvg(`<path d="M8 3H2v15h7c1.7 0 3 1.3 3 3V7c0-2.2-1.8-4-4-4Z"/><path d="m16 12 2 2 4-4"/><path d="M22 6V3h-6c-2.2 0-4 1.8-4 4v14c0-1.7 1.3-3 3-3h7V6Z"/>`);
+            title = 'Link Behavior: Default (Per-link setting)';
+        } else if (globalOpenMode === 'force-external') {
+            iconHtml = baseSvg(`<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/>`);
+            title = 'Link Behavior: Force All External';
+        } else { // force-internal
+            iconHtml = baseSvg(`<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>`);
+            title = 'Link Behavior: Force All Internal (New Tab)';
+        }
+        elements.linkModeBtn.innerHTML = iconHtml;
+        elements.linkModeBtn.title = title;
+    }
+
+    // --- NEW: Compact View Functions ---
+    
+    /**
+     * --- NEW FUNCTION ---
+     * Loads the compact view setting from localStorage.
+     */
+    function loadCompactView() {
+        try {
+            isCompactView = localStorage.getItem(CLOUDSTAX_COMPACT_VIEW_KEY) === 'true';
+        } catch (error) {
+            logError(error, 'loadCompactView');
+            isCompactView = false;
+        }
+    }
+    
+    /**
+     * --- NEW FUNCTION ---
+     * Saves the compact view setting to state, localStorage, and re-renders.
+     */
+    function saveCompactView(isCompact) {
+        try {
+            isCompactView = !!isCompact; // Ensure boolean
+            localStorage.setItem(CLOUDSTAX_COMPACT_VIEW_KEY, isCompactView);
+            showNotification("View mode saved!");
+            renderBookmarks(); // Re-render to apply/remove compact class
+        } catch (error) {
+            logError(error, 'saveCompactView');
         }
     }
 
@@ -1043,6 +1149,13 @@
      */
     function renderBookmarks() {
       try {
+        // --- NEW: Apply/remove compact-mode class ---
+        if (isCompactView) {
+            elements.bookmarksView.classList.add('compact-mode');
+        } else {
+            elements.bookmarksView.classList.remove('compact-mode');
+        }
+      
         const searchTerm = elements.searchIn.value.toLowerCase();
         const stackFilter = elements.stackFilter.value;
 
@@ -1164,7 +1277,6 @@
             const bookmark = allBookmarks.find(b => b.id === btn.dataset.id);
             if (bookmark) updateRecentLaunches(bookmark);
             
-            // --- MODIFIED: Check global override ---
             if (globalOpenMode === 'force-external') {
                 openLinkExternally(url);
             } else if (globalOpenMode === 'force-internal') {
@@ -1176,7 +1288,6 @@
                   window.open(url, '_blank', 'noopener');
                 }
             }
-            // --- END MODIFICATION ---
           });
         });
         document.querySelectorAll('.edit-btn').forEach(btn => {
@@ -1500,7 +1611,6 @@
             `;
             
             item.addEventListener('click', () => {
-                // --- MODIFIED: Check global override ---
                 if (globalOpenMode === 'force-external') {
                     openLinkExternally(bookmark.url);
                 } else if (globalOpenMode === 'force-internal') {
@@ -1512,7 +1622,6 @@
                         window.open(bookmark.url, '_blank', 'noopener');
                     }
                 }
-                // --- END MODIFICATION ---
             });
             
             elements.recentLinksList.appendChild(item);
@@ -1816,7 +1925,6 @@
           if (bookmark) {
             updateRecentLaunches(bookmark); // Update recent for each
             
-            // --- MODIFIED: Check global override ---
             if (globalOpenMode === 'force-external') {
                 openLinkExternally(bookmark.url);
             } else if (globalOpenMode === 'force-internal') {
@@ -1828,7 +1936,6 @@
                   window.open(bookmark.url, '_blank', 'noopener');
                 }
             }
-            // --- END MODIFICATION ---
             launchedCount++;
           }
         });
@@ -2096,14 +2203,23 @@
     }
     
     /**
-     * *** NEW FUNCTION ***
+     * --- MODIFIED: Added Merge/Append logic ---
      * Handles importing bookmarks from a JSON backup file.
      */
     function handleImportJson() {
-        // 1. Show confirmation
+        // 1. Show confirmation with merge/append options
         const body = `
-            <p class="text-sm text-gray-300">Are you sure you want to import from a JSON backup?</p>
-            <p class="text-sm text-gray-400 mt-2">This will add all bookmarks from the file. This may create duplicates if bookmarks already exist.</p>
+            <p class="text-sm text-gray-300">Choose an import method for your JSON backup.</p>
+            <div class="space-y-2 mt-3">
+                <label class="flex items-center">
+                    <input type="radio" name="import-mode" value="append" class="form-radio" checked>
+                    <span class="ml-2 text-sm text-gray-300">Append (Add all bookmarks, may create duplicates)</span>
+                </label>
+                <label class="flex items-center">
+                    <input type="radio" name="import-mode" value="merge" class="form-radio">
+                    <span class="ml-2 text-sm text-gray-300">Merge (Skip bookmarks if URL already exists)</span>
+                </label>
+            </div>
         `;
         const footer = `
             <button id="cancelImport" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
@@ -2113,6 +2229,8 @@
         
         $('cancelImport').addEventListener('click', hideModal);
         $('confirmImport').addEventListener('click', () => {
+            // --- NEW: Get the selected import mode ---
+            const importMode = document.querySelector('input[name="import-mode"]:checked').value;
             hideModal();
             
             // 2. Open file picker
@@ -2134,14 +2252,24 @@
                             throw new Error("Invalid file format. Expected a JSON array.");
                         }
                         
+                        // --- NEW: Create a Set of existing URLs for merge check ---
+                        const existingUrls = new Set(allBookmarks.map(b => b.url));
+                        let skippedCount = 0;
+                        
                         const currentCount = allBookmarks.length;
                         const bookmarksToImport = [];
                         
                         importedData.forEach((item, index) => {
-                            // Basic validation
                             if (item && item.name && item.url) {
                                 const stack = item.stack || "General";
                                 const normalizedUrl = normalizeUrl(item.url); 
+                                
+                                // --- NEW: Merge logic check ---
+                                if (importMode === 'merge' && existingUrls.has(normalizedUrl)) {
+                                    skippedCount++;
+                                    return; // Skip this duplicate
+                                }
+                                
                                 bookmarksToImport.push({
                                   name: String(item.name),
                                   url: normalizedUrl,
@@ -2158,10 +2286,11 @@
 
                         if (bookmarksToImport.length > 0) {
                            await batchImportToDB(bookmarksToImport);
-                           showNotification(`Successfully imported ${bookmarksToImport.length} bookmarks.`);
+                           // --- NEW: Updated notification ---
+                           showNotification(`Imported ${bookmarksToImport.length} bookmarks. ${skippedCount > 0 ? `Skipped ${skippedCount} duplicates.` : ''}`);
                            await loadAllBookmarks(); // Full reload
                         } else {
-                          showNotification('File was empty or no valid bookmarks were found.', true);
+                          showNotification(`No new bookmarks to import. ${skippedCount > 0 ? `Skipped ${skippedCount} duplicates.` : ''}`, skippedCount === 0);
                         }
                     } catch (error) {
                         logError(error, 'handleImportJson:fileread');
@@ -2466,7 +2595,25 @@
         
         const chevron = `<svg class="settings-chevron w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>`;
         
-        // --- NEW: Link Behavior Section ---
+        // --- NEW: Appearance Section ---
+        const appearanceHtml = `
+            <div class="settings-section">
+                <button class="settings-section-title" data-target="content-appearance">
+                    <span>Appearance</span>
+                    ${chevron}
+                </button>
+                <div id="content-appearance" class="settings-section-content hidden">
+                    <p class="settings-section-desc">
+                        Change the look and feel of the app.
+                    </p>
+                    <label class="flex items-center">
+                        <input id="modalCompactView" type="checkbox" class="form-checkbox" ${isCompactView ? 'checked' : ''}>
+                        <span class="ml-2 text-sm text-gray-300">Enable Compact View</span>
+                    </label>
+                </div>
+            </div>
+        `;
+        
         const linkBehaviorHtml = `
             <div class="settings-section">
                 <button class="settings-section-title" data-target="content-link-behavior">
@@ -2495,7 +2642,6 @@
             </div>
         `;
         
-        // --- NEW: Data Management Section ---
         const dataManagementHtml = `
             <div class="settings-section">
                 <button class="settings-section-title" data-target="content-data-mgmt">
@@ -2521,6 +2667,7 @@
         `;
         
         const body = `
+            ${appearanceHtml}
             ${linkBehaviorHtml} 
         
             <div class="settings-section">
@@ -2596,13 +2743,6 @@
         `;
         
         showModal("Settings", body, footer);
-        
-        // --- NEW: Add listeners for link behavior radio buttons ---
-        document.querySelectorAll('input[name="link-behavior"]').forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                saveOpenMode(e.target.value);
-            });
-        });
     }
     
     /**
@@ -2644,7 +2784,7 @@
     }
     
     /**
-     * Handles all clicks inside the modal for event delegation.
+     * Handles all *button clicks* inside the modal for event delegation.
      * @param {Event} e - The click event.
      */
     function handleModalClicks(e) {
@@ -2683,7 +2823,6 @@
                 hideModal();
                 handleShowStackCreator();
                 break;
-            // --- NEW: Handle Import JSON button ---
             case 'modalImportJson':
                 hideModal();
                 handleImportJson();
@@ -2711,6 +2850,25 @@
         }
     }
 
+    /**
+     * --- NEW FUNCTION ---
+     * Handles *change events* (radios, checkboxes) inside the modal.
+     * @param {Event} e - The change event.
+     */
+    function handleModalChanges(e) {
+        const target = e.target;
+
+        // Link Behavior Radio Buttons
+        if (target.name === 'link-behavior') {
+            saveOpenMode(target.value);
+        }
+        
+        // Compact View Checkbox
+        if (target.id === 'modalCompactView') {
+            saveCompactView(target.checked);
+        }
+    }
+
 
     // --- Initialization ---
 
@@ -2728,10 +2886,16 @@
         // 4. Load stack icons
         loadStackIcons();
         
-        // --- NEW: Load global open mode ---
+        // 5. Load global open mode
         loadOpenMode();
         
-        // 5. Load all bookmarks from the DB
+        // 6. --- NEW: Load compact view setting ---
+        loadCompactView();
+        
+        // 7. --- NEW: Set initial link mode icon ---
+        updateLinkModeBtnIcon();
+        
+        // 8. Load all bookmarks from the DB
         await loadAllBookmarks(); // This now calls refreshUI()
  
       } catch (error) {
@@ -2740,7 +2904,7 @@
         return;
       }
 
-      // 6. Add DOM Event Listeners
+      // 9. Add DOM Event Listeners
       elements.addBtn.addEventListener('click', addBookmark);
       elements.urlIn.addEventListener('keydown', e => e.key === 'Enter' && addBookmark());
       elements.nameIn.addEventListener('keydown', e => e.key === 'Enter' && addBookmark());
@@ -2765,14 +2929,17 @@
       elements.quickGrabBtn.addEventListener('click', handleQuickGrabModal); 
       elements.settingsBtn.addEventListener('click', handleShowSettings);
       elements.reorderBtn.addEventListener('click', handleReorderToggle); 
+      // --- NEW: Link mode toggle button listener ---
+      elements.linkModeBtn.addEventListener('click', toggleLinkMode);
       
       // Standby listeners
       elements.standbyBtn.addEventListener('click', () => toggleStandbyMode(true));
       elements.openAppBtn.addEventListener('click', () => toggleStandbyMode(false));
       
       // Modal event delegation
-      elements.modalBody.addEventListener('click', handleModalClicks);
-      elements.modalFooter.addEventListener('click', handleModalClicks); 
+      elements.modalBody.addEventListener('click', handleModalClicks); // For buttons
+      elements.modalBody.addEventListener('change', handleModalChanges); // For radios/checkboxes
+      elements.modalFooter.addEventListener('click', handleModalClicks); // For buttons
     }
     
     // --- Global Error Handlers ---
