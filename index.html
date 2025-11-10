@@ -308,7 +308,13 @@
           <input id="urlIn" placeholder="URL (e.g., google.com)" class="md:col-span-2 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-          <input id="stackIn" placeholder="Stack (e.g., Tools)" class="md:col-span-1 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <!-- *** MODIFICATION: Added list="mainStackDatalist" *** -->
+          <input id="stackIn" placeholder="Stack (e.g., Tools)" list="mainStackDatalist" class="md:col-span-1 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <!-- *** MODIFICATION: Added datalist *** -->
+          <datalist id="mainStackDatalist">
+            <!-- Options will be populated by JS -->
+          </datalist>
+          
           <div class="md:col-span-1 flex items-center justify-center md:justify-start gap-4 pl-1">
              <div class="flex items-center">
                 <input id="openExternalIn" type="checkbox" class="form-checkbox">
@@ -484,6 +490,8 @@
       errorCountBadge: $('errorCountBadge'),
       reorderBtn: $('reorderBtn'), 
       paginationControls: $('paginationControls'), 
+      // *** MODIFICATION: Added mainStackDatalist ***
+      mainStackDatalist: $('mainStackDatalist'),
       // Standby Mode Elements
       mainAppPanel: $('mainAppPanel'),
       standbyPanel: $('standbyPanel'),
@@ -958,6 +966,8 @@
     function refreshUI() {
         renderStacks();
         renderBookmarks();
+        // *** MODIFICATION: Call new function to update datalist ***
+        updateMainStackDatalist();
     }
 
     /**
@@ -1315,6 +1325,23 @@
       } catch (error) {
           logError(error, 'renderStacks');
       }
+    }
+
+    /**
+     * *** NEW FUNCTION ***
+     * Updates the main stack datalist for autofill.
+     */
+    function updateMainStackDatalist() {
+        try {
+            const allStacks = [...new Set(allBookmarks.map(b => b.stack || b.category || "General"))].sort();
+            const datalistHtml = allStacks.map(s => `<option value="${sanitize(s)}"></option>`).join('');
+            
+            if (elements.mainStackDatalist) {
+                elements.mainStackDatalist.innerHTML = datalistHtml;
+            }
+        } catch (error) {
+            logError(error, 'updateMainStackDatalist');
+        }
     }
     
     /**
@@ -1776,11 +1803,22 @@
     
     /**
      * Shows a small modal to quickly paste and grab a link.
+     * *** MODIFIED: Added Stack input with datalist ***
      */
     function handleQuickGrabModal() {
+      // Get stack datalist HTML, just like in the edit modal
+      const allStacks = [...new Set(allBookmarks.map(b => b.stack || b.category || "General"))].sort();
+      const datalistHtml = allStacks.map(s => `<option value="${sanitize(s)}"></option>`).join('');
+        
       const body = `
         <p class="text-sm text-gray-300 mb-2">Paste your link below and press Enter.</p>
         <input id="quickGrabInput" class="w-full text-sm bg-gray-900 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://...">
+        
+        <label class="text-xs text-gray-400 mt-3 mb-1 block">Stack (optional)</label>
+        <input id="quickGrabStackInput" class="w-full text-sm bg-gray-900 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Quick Stack" list="quickGrabStacks">
+        <datalist id="quickGrabStacks">
+          ${datalistHtml}
+        </datalist>
       `;
       const footer = `
         <button id="cancelQuickGrab" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
@@ -1790,11 +1828,16 @@
       showModal("Quick Grab", body, footer);
       
       const input = $('quickGrabInput');
-      input.focus(); // Auto-focus the input
+      const stackInput = $('quickGrabStackInput');
+      input.focus(); // Auto-focus the URL input
       
       const grabFunc = async () => {
         const text = input.value;
-        if (await processQuickGrabPaste(text)) {
+        const stackInputValue = stackInput.value.trim();
+        // Use the input value, or default to "Quick Stack" if empty
+        const stackName = stackInputValue.length > 0 ? (stackInputValue.charAt(0).toUpperCase() + stackInputValue.slice(1)) : "Quick Stack";
+
+        if (await processQuickGrabPaste(text, stackName)) {
             hideModal(); // Only hide on success
         } else {
             showNotification("No valid link found.", true);
@@ -1805,7 +1848,15 @@
       
       $('cancelQuickGrab').addEventListener('click', hideModal);
       $('confirmQuickGrab').addEventListener('click', grabFunc);
+      
+      // Add Enter key listener to both inputs
       input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            grabFunc();
+        }
+      });
+      stackInput.addEventListener('keydown', e => {
         if (e.key === 'Enter') {
             e.preventDefault();
             grabFunc();
