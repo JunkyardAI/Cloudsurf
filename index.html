@@ -62,6 +62,39 @@
       --tw-ring-shadow: 0 0 #0000;
       box-shadow: 0 0 0 2px var(--tw-ring-color);
     }
+    /* Custom radio style */
+    .form-radio {
+      appearance: none;
+      background-color: #374151; /* gray-700 */
+      border: 1px solid #4b5563; /* gray-600 */
+      padding: 0;
+      -webkit-print-color-adjust: exact;
+      color-adjust: exact;
+      display: inline-block;
+      vertical-align: middle;
+      background-origin: border-box;
+      user-select: none;
+      flex-shrink: 0;
+      border-radius: 100%;
+      height: 1.25rem; /* h-5 */
+      width: 1.25rem; /* w-5 */
+    }
+    .form-radio:checked {
+      background-color: #3b82f6; /* blue-500 */
+      border-color: #3b82f6;
+      background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3ccircle cx='8' cy='8' r='3'/%3e%3c/svg%3e");
+      background-size: 100% 100%;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+    .form-radio:focus {
+      outline: 2px solid transparent;
+      outline-offset: 2px;
+      --tw-ring-color: #3b82f6; /* ring-blue-500 */
+      --tw-ring-offset-shadow: 0 0 #0000;
+      --tw-ring-shadow: 0 0 #0000;
+      box-shadow: 0 0 0 2px var(--tw-ring-color);
+    }
     /* Styles for log viewer */
      #logContainer {
         max-height: 40vh;
@@ -308,9 +341,7 @@
           <input id="urlIn" placeholder="URL (e.g., google.com)" class="md:col-span-2 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-          <!-- *** MODIFICATION: Added list="mainStackDatalist" *** -->
           <input id="stackIn" placeholder="Stack (e.g., Tools)" list="mainStackDatalist" class="md:col-span-1 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <!-- *** MODIFICATION: Added datalist *** -->
           <datalist id="mainStackDatalist">
             <!-- Options will be populated by JS -->
           </datalist>
@@ -369,7 +400,7 @@
       <!-- Footer Buttons -->
       <div id="footerButtons" class="p-3 bg-gray-900 border-t border-gray-800 flex gap-3 justify-end flex-wrap flex-shrink-0">
         <button id="settingsBtn" class="relative px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
             Settings
             <span id="errorCountBadge" class="hidden absolute -top-2 -right-2 bg-red-600 text-white text-xs rounded-full px-1.5 py-0.5 leading-none">0</span>
         </button>
@@ -433,12 +464,14 @@
 
 
   <!-- App Logic -->
-  <script type="module">
+  <script type"module">
     // --- IndexedDB Configuration ---
     const DB_NAME = 'cloudstax_db';
     const DB_VERSION = 1; 
     const STORE_NAME = 'bookmarks';
     const STACK_ICONS_KEY = 'cloudstax_stack_icons';
+    // --- NEW: Key for global open mode ---
+    const CLOUDSTAX_OPEN_MODE_KEY = 'cloudstax_open_mode';
 
     // --- Global State ---
     let db; // IndexedDB instance
@@ -451,6 +484,8 @@
     let dragSrcEl = null; // For drag/drop
     let recentLaunches = []; // For Standby Mode
     let stackIcons = new Map(); // For Stack Icons
+    // --- NEW: Global open mode state ---
+    let globalOpenMode = 'default'; // 'default', 'force-external', 'force-internal'
     let hasStandbyBeenInitialized = false; // For standby animation performance
     let searchDebounceTimer; // For debouncing search input
     
@@ -490,7 +525,6 @@
       errorCountBadge: $('errorCountBadge'),
       reorderBtn: $('reorderBtn'), 
       paginationControls: $('paginationControls'), 
-      // *** MODIFICATION: Added mainStackDatalist ***
       mainStackDatalist: $('mainStackDatalist'),
       // Standby Mode Elements
       mainAppPanel: $('mainAppPanel'),
@@ -957,6 +991,41 @@
             logError(error, 'saveStackIcons');
         }
     }
+    
+    // --- NEW: Link Behavior Functions ---
+    
+    /**
+     * Loads the global link open mode from localStorage.
+     */
+    function loadOpenMode() {
+        try {
+            const mode = localStorage.getItem(CLOUDSTAX_OPEN_MODE_KEY) || 'default';
+            if (['default', 'force-external', 'force-internal'].includes(mode)) {
+                globalOpenMode = mode;
+            } else {
+                globalOpenMode = 'default';
+            }
+        } catch (error) {
+            logError(error, 'loadOpenMode');
+            globalOpenMode = 'default';
+        }
+    }
+    
+    /**
+     * Saves the global link open mode to state and localStorage.
+     */
+    function saveOpenMode(mode) {
+        try {
+            if (['default', 'force-external', 'force-internal'].includes(mode)) {
+                globalOpenMode = mode;
+                localStorage.setItem(CLOUDSTAX_OPEN_MODE_KEY, mode);
+                showNotification("Link behavior saved!");
+            }
+        } catch (error) {
+            logError(error, 'saveOpenMode');
+        }
+    }
+
 
     // --- Rendering, Pagination, and Reordering ---
     
@@ -966,7 +1035,6 @@
     function refreshUI() {
         renderStacks();
         renderBookmarks();
-        // *** MODIFICATION: Call new function to update datalist ***
         updateMainStackDatalist();
     }
 
@@ -1096,11 +1164,19 @@
             const bookmark = allBookmarks.find(b => b.id === btn.dataset.id);
             if (bookmark) updateRecentLaunches(bookmark);
             
-            if (isExternal) {
-              openLinkExternally(url);
-            } else {
-              window.open(url, '_blank', 'noopener');
+            // --- MODIFIED: Check global override ---
+            if (globalOpenMode === 'force-external') {
+                openLinkExternally(url);
+            } else if (globalOpenMode === 'force-internal') {
+                window.open(url, '_blank', 'noopener');
+            } else { // 'default' mode
+                if (isExternal) {
+                  openLinkExternally(url);
+                } else {
+                  window.open(url, '_blank', 'noopener');
+                }
             }
+            // --- END MODIFICATION ---
           });
         });
         document.querySelectorAll('.edit-btn').forEach(btn => {
@@ -1328,7 +1404,6 @@
     }
 
     /**
-     * *** NEW FUNCTION ***
      * Updates the main stack datalist for autofill.
      */
     function updateMainStackDatalist() {
@@ -1425,11 +1500,19 @@
             `;
             
             item.addEventListener('click', () => {
-                if (bookmark.openExternal) {
+                // --- MODIFIED: Check global override ---
+                if (globalOpenMode === 'force-external') {
                     openLinkExternally(bookmark.url);
-                } else {
+                } else if (globalOpenMode === 'force-internal') {
                     window.open(bookmark.url, '_blank', 'noopener');
+                } else { // 'default' mode
+                    if (bookmark.openExternal) {
+                        openLinkExternally(bookmark.url);
+                    } else {
+                        window.open(bookmark.url, '_blank', 'noopener');
+                    }
                 }
+                // --- END MODIFICATION ---
             });
             
             elements.recentLinksList.appendChild(item);
@@ -1451,8 +1534,6 @@
             renderRecentLinks();
             
             // --- ELECTRON API CALL (STANDBY) ---
-            // This was previously the MAIN size, which was incorrect.
-            // Now setting to STANDBY size.
             if (window.electronWindow && window.electronWindow.setProperties) {
                 window.electronWindow.setProperties({
                     width: 350, // Based on max-w-xs (320px) + padding
@@ -1467,8 +1548,6 @@
             elements.standbyPanel.classList.add('hidden');
             
             // --- ELECTRON API CALL (MAIN) ---
-            // This was previously the STANDBY size, which was incorrect.
-            // Now setting to MAIN size.
             if (window.electronWindow && window.electronWindow.setProperties) {
                 window.electronWindow.setProperties({
                     width: 1280, // Default main size from your example
@@ -1736,11 +1815,20 @@
           const bookmark = allBookmarks.find(b => b.id === id);
           if (bookmark) {
             updateRecentLaunches(bookmark); // Update recent for each
-            if (bookmark.openExternal) {
-              openLinkExternally(bookmark.url);
-            } else {
-              window.open(bookmark.url, '_blank', 'noopener');
+            
+            // --- MODIFIED: Check global override ---
+            if (globalOpenMode === 'force-external') {
+                openLinkExternally(bookmark.url);
+            } else if (globalOpenMode === 'force-internal') {
+                window.open(bookmark.url, '_blank', 'noopener');
+            } else { // 'default' mode
+                if (bookmark.openExternal) {
+                  openLinkExternally(bookmark.url);
+                } else {
+                  window.open(bookmark.url, '_blank', 'noopener');
+                }
             }
+            // --- END MODIFICATION ---
             launchedCount++;
           }
         });
@@ -1768,7 +1856,7 @@
       const doc = parser.parseFromString(htmlString, 'text/html');
       const links = doc.querySelectorAll('a');
       const bookmarks = [];
-      const base = baseUrl; // This is now correct, it's either the remote URL or undefined
+      const base = baseUrl; 
       const currentCount = allBookmarks.length;
       
       links.forEach((link, index) => {
@@ -1777,7 +1865,6 @@
         
         if (url && url !== '#' && !url.startsWith('javascript:')) {
           try {
-            // If base is provided, resolve relative URLs. If not, use the URL as-is.
             const absoluteUrl = base ? new URL(url, base).href : url;
             const normalizedUrl = normalizeUrl(absoluteUrl);
             
@@ -1790,7 +1877,7 @@
               isFavorite: false,
               createdAt: new Date().toISOString(),
               id: crypto.randomUUID(),
-              orderIndex: currentCount + index // Add orderIndex to the end
+              orderIndex: currentCount + index 
             });
           } catch (e) {
             logError(e, `parseLinksFromHtml (Skipped URL: ${url})`);
@@ -1803,10 +1890,8 @@
     
     /**
      * Shows a small modal to quickly paste and grab a link.
-     * *** MODIFIED: Added Stack input with datalist ***
      */
     function handleQuickGrabModal() {
-      // Get stack datalist HTML, just like in the edit modal
       const allStacks = [...new Set(allBookmarks.map(b => b.stack || b.category || "General"))].sort();
       const datalistHtml = allStacks.map(s => `<option value="${sanitize(s)}"></option>`).join('');
         
@@ -1829,16 +1914,15 @@
       
       const input = $('quickGrabInput');
       const stackInput = $('quickGrabStackInput');
-      input.focus(); // Auto-focus the URL input
+      input.focus(); 
       
       const grabFunc = async () => {
         const text = input.value;
         const stackInputValue = stackInput.value.trim();
-        // Use the input value, or default to "Quick Stack" if empty
         const stackName = stackInputValue.length > 0 ? (stackInputValue.charAt(0).toUpperCase() + stackInputValue.slice(1)) : "Quick Stack";
 
         if (await processQuickGrabPaste(text, stackName)) {
-            hideModal(); // Only hide on success
+            hideModal(); 
         } else {
             showNotification("No valid link found.", true);
             input.focus();
@@ -1849,7 +1933,6 @@
       $('cancelQuickGrab').addEventListener('click', hideModal);
       $('confirmQuickGrab').addEventListener('click', grabFunc);
       
-      // Add Enter key listener to both inputs
       input.addEventListener('keydown', e => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -1883,7 +1966,6 @@
         let addedCount = 0;
         let failedCount = 0;
         
-        // Only process the first valid link found.
         const lineToProcess = lines[0];
 
         let normalizedUrl;
@@ -1892,11 +1974,11 @@
         } catch (e) {
             logError(e, `processQuickGrab (Skipped: ${lineToProcess})`);
             failedCount++;
-            return false; // Failed
+            return false; 
         }
 
         const name = extractNameFromUrl(normalizedUrl, '');
-        const stack = stackName; // Use the parameter
+        const stack = stackName; 
         const icon = getFavicon(normalizedUrl);
         
         const newBookmark = {
@@ -1908,7 +1990,7 @@
             openExternal: false,
             isFavorite: false,
             createdAt: new Date().toISOString(),
-            orderIndex: allBookmarks.length // Add to the end
+            orderIndex: allBookmarks.length 
         };
 
         try {
@@ -1921,10 +2003,8 @@
 
         if (addedCount > 0) {
             showNotification(`Added 1 bookmark to ${stackName}.`);
-            // --- OPTIMIZATION ---
             allBookmarks.push(newBookmark);
             refreshUI();
-            // --- END OPTIMIZATION ---
         }
         if (failedCount > 0) {
             showNotification(`Link failed to import. Check log.`, true);
@@ -1939,7 +2019,6 @@
     async function handleInstallTools() {
       const toolsUrl = 'https://junkyardai.github.io/Cloudstax-Default-Tools/';
       
-      // Show confirmation modal first
       const body = `
         <p class="text-sm text-gray-300">This will install the default Cloudstax tools from:</p>
         <p class="text-sm text-blue-400 truncate my-2">${sanitize(toolsUrl)}</p>
@@ -1955,7 +2034,6 @@
       $('cancelInstall').addEventListener('click', hideModal);
       $('confirmInstall').addEventListener('click', async () => {
         try {
-          // Original logic is now inside the confirmation
           const confirmBtn = $('confirmInstall');
           confirmBtn.disabled = true;
           confirmBtn.textContent = 'Installing...';
@@ -1971,14 +2049,14 @@
           if (bookmarksToImport.length > 0) {
              await batchImportToDB(bookmarksToImport);
              showNotification(`Successfully installed ${bookmarksToImport.length} tools.`);
-             await loadAllBookmarks(); // Full reload is correct here for batch import
+             await loadAllBookmarks(); 
           } else {
             showNotification('Tools file was empty or no valid links were found.', true);
           }
         } catch (error) {
           logError(error, 'handleInstallTools');
         } finally {
-          hideModal(); // Close modal after success or failure
+          hideModal(); 
         }
       });
     }
@@ -1993,7 +2071,6 @@
           return;
         }
         
-        // Create a cleaner export format
         const exportData = allBookmarks.map(b => ({
           name: b.name,
           url: b.url,
@@ -2008,7 +2085,7 @@
         const downloadAnchor = document.createElement('a');
         downloadAnchor.setAttribute("href", dataStr);
         downloadAnchor.setAttribute("download", `cloudstax_backup_${new Date().toISOString().split('T')[0]}.json`);
-        document.body.appendChild(downloadAnchor); // required for firefox
+        document.body.appendChild(downloadAnchor); 
         downloadAnchor.click();
         downloadAnchor.remove();
         
@@ -2016,6 +2093,85 @@
       } catch (error) {
         logError(error, 'exportBookmarks');
       }
+    }
+    
+    /**
+     * *** NEW FUNCTION ***
+     * Handles importing bookmarks from a JSON backup file.
+     */
+    function handleImportJson() {
+        // 1. Show confirmation
+        const body = `
+            <p class="text-sm text-gray-300">Are you sure you want to import from a JSON backup?</p>
+            <p class="text-sm text-gray-400 mt-2">This will add all bookmarks from the file. This may create duplicates if bookmarks already exist.</p>
+        `;
+        const footer = `
+            <button id="cancelImport" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
+            <button id="confirmImport" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">Choose File & Import</button>
+        `;
+        showModal("Import from JSON Backup", body, footer);
+        
+        $('cancelImport').addEventListener('click', hideModal);
+        $('confirmImport').addEventListener('click', () => {
+            hideModal();
+            
+            // 2. Open file picker
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = '.json,application/json';
+            
+            fileInput.onchange = e => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const jsonText = event.target.result;
+                        const importedData = JSON.parse(jsonText);
+                        
+                        if (!Array.isArray(importedData)) {
+                            throw new Error("Invalid file format. Expected a JSON array.");
+                        }
+                        
+                        const currentCount = allBookmarks.length;
+                        const bookmarksToImport = [];
+                        
+                        importedData.forEach((item, index) => {
+                            // Basic validation
+                            if (item && item.name && item.url) {
+                                const stack = item.stack || "General";
+                                const normalizedUrl = normalizeUrl(item.url); 
+                                bookmarksToImport.push({
+                                  name: String(item.name),
+                                  url: normalizedUrl,
+                                  stack: String(stack),
+                                  icon: getFavicon(normalizedUrl),
+                                  openExternal: !!item.openExternal,
+                                  isFavorite: !!item.isFavorite,
+                                  createdAt: item.createdAt || new Date().toISOString(),
+                                  id: crypto.randomUUID(),
+                                  orderIndex: item.orderIndex ?? (currentCount + index)
+                                });
+                            }
+                        });
+
+                        if (bookmarksToImport.length > 0) {
+                           await batchImportToDB(bookmarksToImport);
+                           showNotification(`Successfully imported ${bookmarksToImport.length} bookmarks.`);
+                           await loadAllBookmarks(); // Full reload
+                        } else {
+                          showNotification('File was empty or no valid bookmarks were found.', true);
+                        }
+                    } catch (error) {
+                        logError(error, 'handleImportJson:fileread');
+                        showNotification(`Import failed: ${error.message}`, true);
+                    }
+                };
+                reader.readAsText(file);
+            };
+            fileInput.click();
+        });
     }
     
     /**
@@ -2031,19 +2187,21 @@
             <button id="cancelImport" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
             <button id="nextImport" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">Next</button>
         `;
-        showModal("Import Stack Preset", body, footer);
+        showModal("Import Stack Preset (HTML)", body, footer);
         
         const input = $('importStackName');
         input.focus();
         
         $('cancelImport').addEventListener('click', hideModal);
         $('nextImport').addEventListener('click', () => {
-            const stackName = input.value.trim();
-            if (!stackName) {
+            const stackNameRaw = input.value.trim();
+            if (!stackNameRaw) {
                 showNotification("Stack name is required.", true);
                 return;
             }
-            hideModal(); // Close this modal
+            const stackName = stackNameRaw.charAt(0).toUpperCase() + stackNameRaw.slice(1);
+            
+            hideModal(); 
             
             // 2. Open file picker
             const fileInput = document.createElement('input');
@@ -2057,13 +2215,12 @@
                 reader.onload = async (event) => {
                     try {
                         const htmlText = event.target.result;
-                        // Pass stackName, but no baseUrl since it's a local file
                         const bookmarksToImport = parseLinksFromHtml(htmlText, stackName); 
 
                         if (bookmarksToImport.length > 0) {
                            await batchImportToDB(bookmarksToImport);
                            showNotification(`Successfully imported ${bookmarksToImport.length} links to "${stackName}".`);
-                           await loadAllBookmarks(); // Full reload is correct here
+                           await loadAllBookmarks(); 
                         } else {
                           showNotification('File was empty or no valid links were found.', true);
                         }
@@ -2135,7 +2292,7 @@
     }
     function stackCreator_render() {
         const listEl = $('stackCreatorList');
-        if (!listEl) return; // Modal not open
+        if (!listEl) return; 
         
         const arr = stackCreator_load();
         listEl.innerHTML = '';
@@ -2174,21 +2331,17 @@
         document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     }
     function stackCreator_handleClear() {
-        // Using a simpler prompt since we're in a modal
         if (stackCreator_load().length === 0) {
             showNotification("List is already empty.");
             return;
         }
 
-        // Get the modal elements
         const modalBody = $('modalBody');
         const modalFooter = $('modalFooter');
         
-        // Save old content
         const oldBody = modalBody.innerHTML;
         const oldFooter = modalFooter.innerHTML;
 
-        // Show confirmation
         modalBody.innerHTML = `
             <p class="text-lg text-gray-100">Are you sure?</p>
             <p class="text-sm text-gray-300 mt-2">This will permanently delete all ${stackCreator_load().length} links from the creator list. This cannot be undone.</p>
@@ -2199,28 +2352,22 @@
             <button id="cancelClear" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
         `;
 
-        // Add listeners for the new buttons
         $('confirmClear').onclick = () => {
             localStorage.removeItem(CREATOR_KEY);
             showNotification("Creator list cleared.");
             
-            // Restore the original modal content
             modalBody.innerHTML = oldBody;
             modalFooter.innerHTML = oldFooter;
             
-            // Re-bind the original listeners
             stackCreator_bindListeners();
-            stackCreator_render(); // Re-render the (now empty) list
+            stackCreator_render(); 
         };
 
         $('cancelClear').onclick = () => {
-            // Restore the original modal content
             modalBody.innerHTML = oldBody;
             modalFooter.innerHTML = oldFooter;
             
-            // Re-bind the original listeners
             stackCreator_bindListeners();
-            // No need to re-render, just restored
         };
     }
     function stackCreator_handlePaste(e) {
@@ -2265,10 +2412,7 @@
         
         showModal("Create Stack Preset", body, footer);
         
-        // Init the creator logic
         stackCreator_render();
-        
-        // Add listeners
         stackCreator_bindListeners();
     }
     
@@ -2277,7 +2421,7 @@
      */
     function stackCreator_bindListeners() {
         const input = $('stackCreatorInput');
-        if (input) { // Check if the elements exist
+        if (input) { 
             input.addEventListener('keydown', stackCreator_handleKeydown);
             input.addEventListener('paste', stackCreator_handlePaste);
         }
@@ -2322,7 +2466,63 @@
         
         const chevron = `<svg class="settings-chevron w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>`;
         
+        // --- NEW: Link Behavior Section ---
+        const linkBehaviorHtml = `
+            <div class="settings-section">
+                <button class="settings-section-title" data-target="content-link-behavior">
+                    <span>Link Behavior</span>
+                    ${chevron}
+                </button>
+                <div id="content-link-behavior" class="settings-section-content hidden">
+                    <p class="settings-section-desc">
+                        Override individual link settings to force all links to open in a specific way.
+                    </p>
+                    <div class="space-y-2" id="linkBehaviorOptions">
+                        <label class="flex items-center">
+                            <input type="radio" name="link-behavior" value="default" class="form-radio" ${globalOpenMode === 'default' ? 'checked' : ''}>
+                            <span class="ml-2 text-sm text-gray-300">Default (Use individual link settings)</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="link-behavior" value="force-external" class="form-radio" ${globalOpenMode === 'force-external' ? 'checked' : ''}>
+                            <span class="ml-2 text-sm text-gray-300">Force All External (In default browser)</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="link-behavior" value="force-internal" class="form-radio" ${globalOpenMode === 'force-internal' ? 'checked' : ''}>
+                            <span class="ml-2 text-sm text-gray-300">Force All Internal (In new tab)</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // --- NEW: Data Management Section ---
+        const dataManagementHtml = `
+            <div class="settings-section">
+                <button class="settings-section-title" data-target="content-data-mgmt">
+                    <span>Data Management</span>
+                    ${chevron}
+                </button>
+                <div id="content-data-mgmt" class="settings-section-content hidden">
+                    <p class="settings-section-desc">
+                        Save or restore a backup of all your bookmarks from a JSON file.
+                    </p>
+                    <div class="flex gap-3">
+                        <button id="modalImportJson" class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2 justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-input"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M2 15h10"/><path d="m5 12-3 3 3 3"/></svg>
+                            Import from JSON
+                        </button>
+                        <button id="modalExportData" class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2 justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-output"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M22 15h-10"/><path d="m19 12-3 3 3 3"/></svg>
+                            Export to JSON
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
         const body = `
+            ${linkBehaviorHtml} 
+        
             <div class="settings-section">
                 <button class="settings-section-title" data-target="content-app-tools">
                     <span>App Tools</span>
@@ -2366,15 +2566,17 @@
                     <div class="flex gap-3">
                         <button id="modalImportStack" class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2 justify-center">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-input"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M2 15h10"/><path d="m5 12-3 3 3 3"/></svg>
-                            Import Stack
+                            Import Stack (HTML)
                         </button>
                         <button id="modalCreateStack" class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2 justify-center">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus-square"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
-                            Create Stack
+                            Create Stack (HTML)
                         </button>
                     </div>
                 </div>
             </div>
+            
+            ${dataManagementHtml}
             
             <div class="settings-section">
                 <button class="settings-section-title" data-target="content-diagnostics">
@@ -2388,22 +2590,6 @@
                     </button>
                 </div>
             </div>
-            
-            <div class="settings-section">
-                <button class="settings-section-title" data-target="content-data-mgmt">
-                    <span>Data Management</span>
-                    ${chevron}
-                </button>
-                <div id="content-data-mgmt" class="settings-section-content hidden">
-                    <p class="settings-section-desc">
-                        Save a backup of all your bookmarks to a JSON file. You can use this file to restore your data later.
-                    </p>
-                    <button id="modalExportData" class="w-full text-left px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-output"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M22 15h-10"/><path d="m19 12-3 3 3 3"/></svg>
-                        Export to JSON
-                    </button>
-                </div>
-            </div>
         `;
         const footer = `
             <button id="closeSettings" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Close</button>
@@ -2411,7 +2597,50 @@
         
         showModal("Settings", body, footer);
         
-        // Listeners are now attached to modalBody in initialize()
+        // --- NEW: Add listeners for link behavior radio buttons ---
+        document.querySelectorAll('input[name="link-behavior"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                saveOpenMode(e.target.value);
+            });
+        });
+    }
+    
+    /**
+     * Shows the error log modal.
+     */
+    function handleViewLog() {
+        let logHtml = '<div id="logContainer">';
+        
+        if (errorLog.length === 0) {
+            logHtml += '<p class="text-sm text-gray-400">No errors recorded. Good job!</p>';
+        } else {
+            // Show most recent errors first
+            logHtml += [...errorLog].reverse().map(err => `
+                <div class="log-entry">
+                    <div><span class="log-time">[${sanitize(err.time)}]</span> <span class="log-context">${sanitize(err.context)}</span></div>
+                    <span class="log-message">${sanitize(err.message)}</span>
+                    ${err.stack ? `<pre class="text-xs text-gray-500 mt-1" style="white-space: pre-wrap; word-break: break-all;">${sanitize(err.stack)}</pre>` : ''}
+                </div>
+            `).join('');
+        }
+        logHtml += '</div>';
+        
+        const footer = `
+            <button id="modalClearLog" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-md text-sm font-medium transition">Clear Log</button>
+            <button id="modalCloseLog" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Close</button>
+        `;
+        
+        showModal("Error Log", logHtml, footer);
+        
+        // Add listeners for these specific buttons
+        $('modalClearLog').addEventListener('click', () => {
+            errorLog = []; // Clear the log
+            elements.errorCountBadge.textContent = '0';
+            elements.errorCountBadge.classList.add('hidden');
+            hideModal();
+            showNotification("Error log cleared.");
+        });
+        $('modalCloseLog').addEventListener('click', hideModal);
     }
     
     /**
@@ -2454,6 +2683,11 @@
                 hideModal();
                 handleShowStackCreator();
                 break;
+            // --- NEW: Handle Import JSON button ---
+            case 'modalImportJson':
+                hideModal();
+                handleImportJson();
+                break;
             case 'modalViewLog':
                 hideModal();
                 handleViewLog();
@@ -2484,7 +2718,6 @@
       try {
         // 1. Initialize the 3D Logos
         initThreeJSAnimation();
-        // Standby animation is now lazy-loaded
           
         // 2. Initialize the local database
         await initDB();
@@ -2494,6 +2727,9 @@
         
         // 4. Load stack icons
         loadStackIcons();
+        
+        // --- NEW: Load global open mode ---
+        loadOpenMode();
         
         // 5. Load all bookmarks from the DB
         await loadAllBookmarks(); // This now calls refreshUI()
@@ -2518,9 +2754,8 @@
       
       elements.stackFilter.addEventListener('change', () => { 
         currentPage = 1;
-        // If in reorder mode, toggle it off when changing filter
         if (isReorderMode) {
-            handleReorderToggle(); // This will also call renderBookmarks
+            handleReorderToggle(); 
         } else {
             renderBookmarks();
         }
@@ -2537,13 +2772,13 @@
       
       // Modal event delegation
       elements.modalBody.addEventListener('click', handleModalClicks);
-      elements.modalFooter.addEventListener('click', handleModalClicks); // <-- FIX: Listen for clicks in the footer too
+      elements.modalFooter.addEventListener('click', handleModalClicks); 
     }
     
     // --- Global Error Handlers ---
     window.onerror = function(message, source, lineno, colno, error) {
       logError(error || { message: message }, `Global Uncaught\nSource: ${source} @ ${lineno}:${colno}`);
-      return true; // Prevents the default browser error console
+      return true; 
     };
 
     window.onunhandledrejection = function(event) {
