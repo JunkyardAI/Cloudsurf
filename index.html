@@ -311,7 +311,7 @@
         background: #dc2626; /* red-600 */
     }
     
-    /* --- NEW: Compact View Styles --- */
+    /* Compact View Styles */
     #bookmarksView.compact-mode .bookmark-item {
         padding: 0.5rem 0.75rem; /* p-2 px-3 */
         gap: 0.5rem; /* gap-2 */
@@ -332,6 +332,19 @@
     #bookmarksView.compact-mode .text-xs {
         /* Keep text-xs */
     }
+
+    /* Active Mode Tab Styles */
+    .mode-tab-active {
+        color: #60a5fa; /* blue-400 */
+        border-bottom-width: 2px;
+        border-color: #60a5fa; /* blue-400 */
+    }
+    .mode-tab-inactive {
+        color: #9ca3af; /* gray-400 */
+    }
+    .mode-tab-inactive:hover {
+        color: #e5e7eb; /* gray-200 */
+    }
   </style>
 </head>
 <body class="h-full bg-gray-950 text-gray-100 md:flex md:items-center md:justify-center md:p-4">
@@ -350,7 +363,7 @@
           <h1 class="text-base font-semibold">Cloudstax</h1>
           <p class="text-xs text-gray-400">Create Your Own Sites Stacks!</p>
         </div>
-        <!-- *** NEW: Link Mode Toggle Button *** -->
+        <!-- Link Mode Toggle Button -->
         <button id="linkModeBtn" class="p-2 text-gray-400 hover:text-white transition" title="Set Link Behavior">
             <!-- Icon will be set by JS -->
         </button>
@@ -362,10 +375,23 @@
 
       <!-- Add Bookmark Form -->
       <div class="p-4 border-b border-gray-800 flex-shrink-0">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <input id="nameIn" placeholder="Name (e.g., Google)" class="md:col-span-1 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <input id="urlIn" placeholder="URL (e.g., google.com)" class="md:col-span-2 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        
+        <!-- Mode Tabs -->
+        <div class="flex gap-4 mb-3">
+            <button id="modeLinkBtn" class="text-xs font-medium pb-1 transition mode-tab-active">Link / File</button>
+            <button id="modeCodeBtn" class="text-xs font-medium pb-1 transition mode-tab-inactive">Raw HTML Code</button>
         </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <input id="nameIn" placeholder="Name (e.g., Google or My App)" class="md:col-span-1 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          
+          <!-- URL Input (Default) -->
+          <input id="urlIn" placeholder="URL (e.g., google.com)" class="md:col-span-2 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          
+          <!-- Code Input (Hidden by default) -->
+          <textarea id="codeIn" placeholder="Paste raw HTML code here..." class="hidden md:col-span-2 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono h-24 resize-none"></textarea>
+        </div>
+        
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
           <input id="stackIn" placeholder="Stack (e.g., Tools)" list="mainStackDatalist" class="md:col-span-1 text-sm bg-gray-800 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
           <datalist id="mainStackDatalist">
@@ -373,7 +399,7 @@
           </datalist>
           
           <div class="md:col-span-1 flex items-center justify-center md:justify-start gap-4 pl-1">
-             <div class="flex items-center">
+             <div class="flex items-center" id="openExternalContainer">
                 <input id="openExternalIn" type="checkbox" class="form-checkbox">
                 <label for="openExternalIn" class="ml-2 text-sm text-gray-300 select-none">External</label>
              </div>
@@ -497,7 +523,6 @@
     const STORE_NAME = 'bookmarks';
     const STACK_ICONS_KEY = 'cloudstax_stack_icons';
     const CLOUDSTAX_OPEN_MODE_KEY = 'cloudstax_open_mode';
-    // --- NEW: Key for compact view ---
     const CLOUDSTAX_COMPACT_VIEW_KEY = 'cloudstax_compact_view';
 
     // --- Global State ---
@@ -512,10 +537,12 @@
     let recentLaunches = []; // For Standby Mode
     let stackIcons = new Map(); // For Stack Icons
     let globalOpenMode = 'default'; // 'default', 'force-external', 'force-internal'
-    // --- NEW: Compact view state ---
     let isCompactView = false; // default to false
     let hasStandbyBeenInitialized = false; // For standby animation performance
     let searchDebounceTimer; // For debouncing search input
+    
+    // --- NEW: Input Mode State ---
+    let addInputMode = 'link'; // 'link' or 'code'
     
     // --- Stack Creator State ---
     const CREATOR_KEY = 'cloudstax_creator_links_v1';
@@ -531,14 +558,16 @@
     const elements = {
       nameIn: $('nameIn'),
       urlIn: $('urlIn'),
+      codeIn: $('codeIn'), // NEW
       stackIn: $('stackIn'),
       openExternalIn: $('openExternalIn'),
+      openExternalContainer: $('openExternalContainer'), // NEW for hiding
       isFavoriteIn: $('isFavoriteIn'),
       addBtn: $('addBtn'),
       searchIn: $('searchIn'),
       stackFilter: $('stackFilter'),
       bookmarksList: $('bookmarksList'),
-      bookmarksView: $('bookmarksView'), // --- NEW: Added for compact view ---
+      bookmarksView: $('bookmarksView'),
       loadingIndicator: $('loadingIndicator'),
       modal: $('modal'),
       modalTitle: $('modalTitle'),
@@ -555,7 +584,10 @@
       reorderBtn: $('reorderBtn'), 
       paginationControls: $('paginationControls'), 
       mainStackDatalist: $('mainStackDatalist'),
-      linkModeBtn: $('linkModeBtn'), // --- NEW: Link mode button ---
+      linkModeBtn: $('linkModeBtn'),
+      // Tabs
+      modeLinkBtn: $('modeLinkBtn'),
+      modeCodeBtn: $('modeCodeBtn'),
       // Standby Mode Elements
       mainAppPanel: $('mainAppPanel'),
       standbyPanel: $('standbyPanel'),
@@ -565,12 +597,6 @@
     };
 
     // --- Error Logging ---
-
-    /**
-     * Logs an error to the global log and updates the UI.
-     * @param {Error} error - The error object.
-     * @param {string} context - A string describing where the error occurred.
-     */
     function logError(error, context) {
         try {
             console.error(context, error); // Keep console logging
@@ -581,199 +607,101 @@
                 stack: error.stack
             };
             errorLog.push(newError);
-            
-            // Update badge
             elements.errorCountBadge.textContent = errorLog.length;
             elements.errorCountBadge.classList.remove('hidden');
-            
         } catch (e) {
             console.error("CRITICAL: Failed to log error:", e);
         }
     }
 
     // --- Animations ---
-
-    /**
-     * Initializes the Three.js logo animation.
-     */
     function initThreeJSAnimation() {
         try {
             const logoCanvas = document.getElementById('logo-canvas');
-            if (!logoCanvas || !window.THREE) {
-                console.warn('Three.js or canvas not found, skipping logo animation.');
-                return;
-            }
-
+            if (!logoCanvas || !window.THREE) return;
             const scene = new THREE.Scene();
             const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000); 
             camera.position.z = 3; 
             const renderer = new THREE.WebGLRenderer({ canvas: logoCanvas, alpha: true });
             renderer.setSize(40, 40); 
             renderer.setPixelRatio(window.devicePixelRatio);
-            
             const geometry = new THREE.TorusKnotGeometry(0.8, 0.25, 100, 16); 
-            const material = new THREE.MeshStandardMaterial({ 
-                color: 0x3b82f6, // blue-500
-                metalness: 0.3,
-                roughness: 0.4 
-            });
+            const material = new THREE.MeshStandardMaterial({ color: 0x3b82f6, metalness: 0.3, roughness: 0.4 });
             const knot = new THREE.Mesh(geometry, material);
             scene.add(knot);
-
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             scene.add(ambientLight);
-            
             const pointLight = new THREE.PointLight(0xffffff, 1);
             pointLight.position.set(2, 3, 4);
             scene.add(pointLight);
-
-            function animate() {
-                requestAnimationFrame(animate);
-                knot.rotation.x += 0.01;
-                knot.rotation.y += 0.01;
-                renderer.render(scene, camera);
-            }
+            function animate() { requestAnimationFrame(animate); knot.rotation.x += 0.01; knot.rotation.y += 0.01; renderer.render(scene, camera); }
             animate();
-        } catch (error) {
-            logError(error, 'initThreeJSAnimation');
-            console.error('Three.js animation failed to initialize', error);
-        }
+        } catch (error) { logError(error, 'initThreeJSAnimation'); }
     }
     
-    /**
-     * Initializes the Three.js logo animation for STANDBY MODE.
-     */
     function initStandbyAnimation() {
         try {
             const logoCanvas = document.getElementById('standby-logo-canvas');
-            if (!logoCanvas || !window.THREE) {
-                console.warn('Three.js or canvas not found, skipping standby logo animation.');
-                return;
-            }
-
+            if (!logoCanvas || !window.THREE) return;
             const scene = new THREE.Scene();
             const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000); 
             camera.position.z = 3; 
-
             const renderer = new THREE.WebGLRenderer({ canvas: logoCanvas, alpha: true });
             renderer.setSize(192, 192); // w-48 h-48
             renderer.setPixelRatio(window.devicePixelRatio);
-            
             const geometry = new THREE.TorusKnotGeometry(1, 0.3, 100, 16); 
-            const material = new THREE.MeshStandardMaterial({ 
-                color: 0x3b82f6, // blue-500
-                metalness: 0.3,
-                roughness: 0.4 
-            });
+            const material = new THREE.MeshStandardMaterial({ color: 0x3b82f6, metalness: 0.3, roughness: 0.4 });
             const knot = new THREE.Mesh(geometry, material);
             scene.add(knot);
-
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             scene.add(ambientLight);
-            
             const pointLight = new THREE.PointLight(0xffffff, 1);
             pointLight.position.set(2, 3, 4);
             scene.add(pointLight);
-
-            function animate() {
-                requestAnimationFrame(animate);
-                knot.rotation.x += 0.01;
-                knot.rotation.y += 0.01;
-                renderer.render(scene, camera);
-            }
+            function animate() { requestAnimationFrame(animate); knot.rotation.x += 0.01; knot.rotation.y += 0.01; renderer.render(scene, camera); }
             animate();
-            
-            hasStandbyBeenInitialized = true; // Set flag
-        } catch (error) {
-            logError(error, 'initStandbyAnimation');
-            console.error('Three.js standby animation failed to initialize', error);
-        }
+            hasStandbyBeenInitialized = true; 
+        } catch (error) { logError(error, 'initStandbyAnimation'); }
     }
 
     // --- Utility Functions ---
-
-    /**
-     * Debounce function to limit how often a function can run.
-     * @param {Function} func - The function to debounce.
-     * @param {number} delay - The delay in milliseconds.
-     */
     function debounce(func, delay) {
         return function(...args) {
             clearTimeout(searchDebounceTimer);
-            searchDebounceTimer = setTimeout(() => {
-                func.apply(this, args);
-            }, delay);
+            searchDebounceTimer = setTimeout(() => { func.apply(this, args); }, delay);
         };
     }
 
-    /**
-     * Normalizes a URL. Adds https:// if no protocol is present.
-     * @param {string} input - The URL string from the user.
-     * @returns {string} A normalized URL.
-     */
     function normalizeUrl(input) {
       let s = String(input || '').trim();
       if (!s) throw new Error('URL cannot be empty.');
-      
-      if (s.startsWith('about:') || s.startsWith('chrome:') || s.startsWith('file:')) {
-        return s;
-      }
-      
+      if (s.startsWith('about:') || s.startsWith('chrome:') || s.startsWith('file:') || s.startsWith('data:')) return s;
       if (/^localhost(:\d+)?$/.test(s) || /^\d{1,3}(\.\d{1,3}){3}(:\d+)?$/.test(s)) {
-        if (!/^http(s)?:\/\//.test(s)) {
-          s = 'http://' + s;
-        }
-      } 
-      else if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(s)) {
-        if (s.includes('.') || s.includes('/')) {
-            s = 'https://' + s;
-        } else {
-            s = 'https://www.google.com/search?q=' + encodeURIComponent(s);
-        }
+        if (!/^http(s)?:\/\//.test(s)) s = 'http://' + s;
+      } else if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(s)) {
+        if (s.includes('.') || s.includes('/')) s = 'https://' + s;
+        else s = 'https://www.google.com/search?q=' + encodeURIComponent(s);
       }
-      
-      try {
-        new URL(s);
-        return s;
-      } catch (e) {
-        console.error("Invalid URL construction:", e);
-        return 'https://www.google.com/search?q=' + encodeURIComponent(input);
-      }
+      try { new URL(s); return s; } 
+      catch (e) { return 'https://www.google.com/search?q=' + encodeURIComponent(input); }
     }
 
-    /**
-     * Extracts a sensible name from a URL if no name is provided.
-     * @param {string} url - The normalized URL.
-     * @param {string} name - The user-provided name.
-     * @returns {string} The best available name.
-     */
     function extractNameFromUrl(url, name) {
       if (name?.trim()) return name.trim();
       try {
+        if (url.startsWith('data:')) return "Data App";
+        if (url === "app:local") return "Data App";
         const host = new URL(url).hostname.replace(/^www\./i, '');
         const candidate = host.split('.')[0];
-        if(candidate.length > 0) {
-            return candidate.charAt(0).toUpperCase() + candidate.slice(1);
-        }
+        if(candidate.length > 0) return candidate.charAt(0).toUpperCase() + candidate.slice(1);
         const urlParams = new URLSearchParams(new URL(url).search);
-        if(urlParams.has('q')) {
-            return `Search: ${urlParams.get('q')}`;
-        }
+        if(urlParams.has('q')) return `Search: ${urlParams.get('q')}`;
       } catch {
-        if(url.includes('search?q=')) {
-            try {
-                const query = url.split('search?q=')[1].split('&')[0];
-                return `Search: ${decodeURIComponent(query)}`;
-            } catch {}
-        }
+        if(url.includes('search?q=')) return `Search: ${url.split('search?q=')[1].split('&')[0]}`;
       }
       return "Untitled";
     }
     
-    /**
-     * Attempts to open a URL in the default external browser.
-     * @param {string} url - The URL to open.
-     */
     function openLinkExternally(url) {
       try {
         const a = document.createElement('a');
@@ -783,17 +711,11 @@
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-      } catch (error) {
-          logError(error, 'openLinkExternally');
-      }
+      } catch (error) { logError(error, 'openLinkExternally'); }
     }
 
-    /**
-     * Gets a favicon URL from Google's service.
-     * @param {string} url - The normalized URL.
-     * @returns {string} The favicon image URL.
-     */
     function getFavicon(url) {
+      if (url === "app:local" || url.startsWith('data:')) return ''; // Special handling for local apps
       try {
         const host = new URL(url).hostname;
         return `https://www.google.com/s2/favicons?domain=${host}&sz=64`;
@@ -802,11 +724,6 @@
       }
     }
 
-    /**
-     * Sanitizes HTML string to prevent XSS.
-     * @param {string} str - The string to sanitize.
-     * @returns {string} A sanitized string.
-     */
     function sanitize(str) {
       if (str === null || str === undefined) return '';
       const temp = document.createElement('div');
@@ -817,48 +734,32 @@
     function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
     function escapeAttr(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
-    /**
-     * Shows a notification message.
-     * @param {string} message - The message to display.
-     * @param {boolean} [isError=false] - Whether this is an error message.
-     */
     function showNotification(message, isError = false) {
       elements.notification.textContent = message;
       elements.notification.classList.remove('hidden', 'bg-green-600', 'bg-red-600');
       elements.notification.classList.add(isError ? 'bg-red-600' : 'bg-green-600');
-      
-      setTimeout(() => {
-        elements.notification.classList.add('hidden');
-      }, 3000);
+      setTimeout(() => { elements.notification.classList.add('hidden'); }, 3000);
     }
 
     // --- Modal Functions ---
-
     function showModal(title, bodyHtml, footerHtml) {
       elements.modalTitle.textContent = title;
       elements.modalBody.innerHTML = bodyHtml;
       elements.modalFooter.innerHTML = footerHtml;
       elements.modal.classList.remove('hidden');
     }
-
     function hideModal() {
       elements.modal.classList.add('hidden');
       elements.modalTitle.textContent = '';
       elements.modalBody.innerHTML = '';
       elements.modalFooter.innerHTML = '';
     }
-    
     elements.modalClose.addEventListener('click', hideModal);
 
     // --- IndexedDB Functions ---
-
-    /**
-     * Initializes the IndexedDB database.
-     */
     function initDB() {
       return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
-
         request.onupgradeneeded = (event) => {
           const db = event.target.result;
           if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -866,300 +767,164 @@
             store.createIndex('orderIndex', 'orderIndex', { unique: false });
           }
         };
-
-        request.onsuccess = (event) => {
-          db = event.target.result;
-          console.log("Database initialized successfully");
-          resolve(db);
-        };
-
-        request.onerror = (event) => {
-          console.error("IndexedDB error:", event.target.error);
-          logError(event.target.error, 'initDB: onerror');
-          elements.loadingIndicator.textContent = "Error: Could not open local database.";
-          reject(event.target.error);
-        };
+        request.onsuccess = (event) => { db = event.target.result; resolve(db); };
+        request.onerror = (event) => { logError(event.target.error, 'initDB: onerror'); reject(event.target.error); };
       });
     }
-
-    /**
-     * Helper to get an object store.
-     * @param {string} mode - 'readonly' or 'readwrite'
-     */
-    function getObjectStore(mode) {
-      const transaction = db.transaction([STORE_NAME], mode);
-      return transaction.objectStore(STORE_NAME);
-    }
-
-    /**
-     * Fetches all bookmarks from IndexedDB.
-     */
+    function getObjectStore(mode) { return db.transaction([STORE_NAME], mode).objectStore(STORE_NAME); }
     function getAllBookmarksFromDB() {
       return new Promise((resolve, reject) => {
-        const store = getObjectStore('readonly');
-        const request = store.getAll();
-
-        request.onsuccess = (event) => {
-          resolve(event.target.result);
-        };
-
-        request.onerror = (event) => {
-          logError(event.target.error, 'getAllBookmarksFromDB');
-          reject(event.target.error);
-        };
+        const request = getObjectStore('readonly').getAll();
+        request.onsuccess = (event) => { resolve(event.target.result); };
+        request.onerror = (event) => { logError(event.target.error, 'getAllBookmarksFromDB'); reject(event.target.error); };
       });
     }
-
-    /**
-     * Adds a single bookmark to IndexedDB.
-     * @param {object} bookmark - The bookmark object to add.
-     */
     function addBookmarkToDB(bookmark) {
       return new Promise((resolve, reject) => {
-        const store = getObjectStore('readwrite');
-        const request = store.add(bookmark);
-
+        const request = getObjectStore('readwrite').add(bookmark);
         request.onsuccess = resolve;
-        request.onerror = (event) => {
-            logError(event.target.error, 'addBookmarkToDB');
-            reject(event.target.error);
-        };
+        request.onerror = (event) => { logError(event.target.error, 'addBookmarkToDB'); reject(event.target.error); };
       });
     }
-
-    /**
-     * Updates a single bookmark in IndexedDB.
-     * @param {object} bookmark - The bookmark object to update.
-     */
     function updateBookmarkInDB(bookmark) {
       return new Promise((resolve, reject) => {
-        const store = getObjectStore('readwrite');
-        const request = store.put(bookmark);
-
+        const request = getObjectStore('readwrite').put(bookmark);
         request.onsuccess = resolve;
-        request.onerror = (event) => {
-            logError(event.target.error, 'updateBookmarkInDB');
-            reject(event.target.error);
-        };
+        request.onerror = (event) => { logError(event.target.error, 'updateBookmarkInDB'); reject(event.target.error); };
       });
     }
-
-    /**
-     * Deletes a single bookmark from IndexedDB by its ID.
-     * @param {string} id - The ID of the bookmark to delete.
-     */
     function deleteBookmarkFromDB(id) {
       return new Promise((resolve, reject) => {
-        const store = getObjectStore('readwrite');
-        const request = store.delete(id);
-
+        const request = getObjectStore('readwrite').delete(id);
         request.onsuccess = resolve;
-        request.onerror = (event) => {
-            logError(event.target.error, 'deleteBookmarkFromDB');
-            reject(event.target.error);
-        };
+        request.onerror = (event) => { logError(event.target.error, 'deleteBookmarkFromDB'); reject(event.target.error); };
       });
     }
-
-    /**
-     * Batch imports an array of bookmarks into IndexedDB.
-     * @param {Array} bookmarks - Array of bookmark objects.
-     */
     function batchImportToDB(bookmarks) {
       return new Promise((resolve, reject) => {
         const transaction = db.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
         const currentCount = allBookmarks.length;
-
         let importCount = 0;
         bookmarks.forEach(bookmark => {
-          if (!bookmark.id) {
-            bookmark.id = crypto.randomUUID();
-          }
-          if (bookmark.orderIndex === undefined) {
-             // Place imported items at the end
-            bookmark.orderIndex = currentCount + importCount;
-          }
+          if (!bookmark.id) bookmark.id = crypto.randomUUID();
+          if (bookmark.orderIndex === undefined) bookmark.orderIndex = currentCount + importCount;
           store.add(bookmark);
           importCount++;
         });
-
-        transaction.oncomplete = () => {
-          resolve(importCount);
-        };
-
-        transaction.onerror = (event) => {
-          logError(event.target.error, 'batchImportToDB');
-          reject(event.target.error);
-        };
+        transaction.oncomplete = () => { resolve(importCount); };
+        transaction.onerror = (event) => { logError(event.target.error, 'batchImportToDB'); reject(event.target.error); };
       });
     }
 
-    // --- Stack Icon Functions ---
-    
-    /**
-     * Loads stack icons from localStorage into the global map.
-     */
+    // --- State Management ---
     function loadStackIcons() {
         try {
             const data = JSON.parse(localStorage.getItem(STACK_ICONS_KEY)) || {};
             stackIcons = new Map(Object.entries(data));
-        } catch (error) {
-            logError(error, 'loadStackIcons');
-            stackIcons = new Map();
-        }
+        } catch (error) { logError(error, 'loadStackIcons'); stackIcons = new Map(); }
     }
-    
-    /**
-     * Saves the global stack icons map to localStorage.
-     */
     function saveStackIcons(newIconMap) {
         try {
             localStorage.setItem(STACK_ICONS_KEY, JSON.stringify(Object.fromEntries(newIconMap)));
-            stackIcons = newIconMap; // Update global state
-        } catch (error) {
-            logError(error, 'saveStackIcons');
-        }
+            stackIcons = newIconMap; 
+        } catch (error) { logError(error, 'saveStackIcons'); }
     }
-    
-    // --- Link Behavior Functions ---
-    
-    /**
-     * Loads the global link open mode from localStorage.
-     */
     function loadOpenMode() {
         try {
             const mode = localStorage.getItem(CLOUDSTAX_OPEN_MODE_KEY) || 'default';
-            if (['default', 'force-external', 'force-internal'].includes(mode)) {
-                globalOpenMode = mode;
-            } else {
-                globalOpenMode = 'default';
-            }
-        } catch (error) {
-            logError(error, 'loadOpenMode');
-            globalOpenMode = 'default';
-        }
+            globalOpenMode = ['default', 'force-external', 'force-internal'].includes(mode) ? mode : 'default';
+        } catch (error) { logError(error, 'loadOpenMode'); globalOpenMode = 'default'; }
     }
-    
-    /**
-     * Saves the global link open mode to state and localStorage.
-     */
     function saveOpenMode(mode) {
         try {
             if (['default', 'force-external', 'force-internal'].includes(mode)) {
                 globalOpenMode = mode;
                 localStorage.setItem(CLOUDSTAX_OPEN_MODE_KEY, mode);
                 showNotification("Link behavior saved!");
-                updateLinkModeBtnIcon(); // --- NEW: Update icon on save
+                updateLinkModeBtnIcon(); 
             }
-        } catch (error) {
-            logError(error, 'saveOpenMode');
-        }
+        } catch (error) { logError(error, 'saveOpenMode'); }
     }
-    
-    /**
-     * --- NEW FUNCTION ---
-     * Cycles through the 3 link behavior modes.
-     */
     function toggleLinkMode() {
-        let newMode = 'default';
-        if (globalOpenMode === 'default') {
-            newMode = 'force-external';
-        } else if (globalOpenMode === 'force-external') {
-            newMode = 'force-internal';
-        } else { // force-internal
-            newMode = 'default';
-        }
+        let newMode = globalOpenMode === 'default' ? 'force-external' : (globalOpenMode === 'force-external' ? 'force-internal' : 'default');
         saveOpenMode(newMode); 
-        
-        // Update radio buttons in settings modal if it's open
         const openRadio = document.querySelector(`input[name="link-behavior"][value="${newMode}"]`);
-        if (openRadio) {
-            openRadio.checked = true;
-        }
+        if (openRadio) openRadio.checked = true;
     }
-    
-    /**
-     * --- NEW FUNCTION ---
-     * Updates the header button icon based on the global link mode.
-     */
     function updateLinkModeBtnIcon() {
-        let iconHtml = '';
-        let title = '';
+        let iconHtml = '', title = '';
         const baseSvg = (paths) => `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
-        
         if (globalOpenMode === 'default') {
             iconHtml = baseSvg(`<path d="M8 3H2v15h7c1.7 0 3 1.3 3 3V7c0-2.2-1.8-4-4-4Z"/><path d="m16 12 2 2 4-4"/><path d="M22 6V3h-6c-2.2 0-4 1.8-4 4v14c0-1.7 1.3-3 3-3h7V6Z"/>`);
             title = 'Link Behavior: Default (Per-link setting)';
         } else if (globalOpenMode === 'force-external') {
             iconHtml = baseSvg(`<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/>`);
             title = 'Link Behavior: Force All External';
-        } else { // force-internal
+        } else { 
             iconHtml = baseSvg(`<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>`);
             title = 'Link Behavior: Force All Internal (New Tab)';
         }
         elements.linkModeBtn.innerHTML = iconHtml;
         elements.linkModeBtn.title = title;
     }
-
-    // --- NEW: Compact View Functions ---
-    
-    /**
-     * --- NEW FUNCTION ---
-     * Loads the compact view setting from localStorage.
-     */
     function loadCompactView() {
-        try {
-            isCompactView = localStorage.getItem(CLOUDSTAX_COMPACT_VIEW_KEY) === 'true';
-        } catch (error) {
-            logError(error, 'loadCompactView');
-            isCompactView = false;
-        }
+        try { isCompactView = localStorage.getItem(CLOUDSTAX_COMPACT_VIEW_KEY) === 'true'; } 
+        catch (error) { logError(error, 'loadCompactView'); isCompactView = false; }
     }
-    
-    /**
-     * --- NEW FUNCTION ---
-     * Saves the compact view setting to state, localStorage, and re-renders.
-     */
     function saveCompactView(isCompact) {
         try {
-            isCompactView = !!isCompact; // Ensure boolean
+            isCompactView = !!isCompact; 
             localStorage.setItem(CLOUDSTAX_COMPACT_VIEW_KEY, isCompactView);
             showNotification("View mode saved!");
-            renderBookmarks(); // Re-render to apply/remove compact class
-        } catch (error) {
-            logError(error, 'saveCompactView');
+            renderBookmarks(); 
+        } catch (error) { logError(error, 'saveCompactView'); }
+    }
+
+    // --- UI Logic: Add Mode Toggle ---
+    function setAddMode(mode) {
+        addInputMode = mode;
+        if (mode === 'link') {
+            elements.urlIn.classList.remove('hidden');
+            elements.codeIn.classList.add('hidden');
+            elements.openExternalContainer.classList.remove('invisible');
+            
+            elements.modeLinkBtn.classList.add('mode-tab-active');
+            elements.modeLinkBtn.classList.remove('mode-tab-inactive');
+            elements.modeCodeBtn.classList.remove('mode-tab-active');
+            elements.modeCodeBtn.classList.add('mode-tab-inactive');
+            
+            elements.urlIn.focus();
+        } else {
+            elements.urlIn.classList.add('hidden');
+            elements.codeIn.classList.remove('hidden');
+            // External toggle doesn't make sense for raw code
+            elements.openExternalContainer.classList.add('invisible');
+            
+            elements.modeLinkBtn.classList.remove('mode-tab-active');
+            elements.modeLinkBtn.classList.add('mode-tab-inactive');
+            elements.modeCodeBtn.classList.add('mode-tab-active');
+            elements.modeCodeBtn.classList.remove('mode-tab-inactive');
+            
+            elements.codeIn.focus();
         }
     }
 
-
-    // --- Rendering, Pagination, and Reordering ---
-    
-    /**
-     * A lightweight function to refresh the UI from the in-memory state.
-     */
+    // --- Rendering ---
     function refreshUI() {
         renderStacks();
         renderBookmarks();
         updateMainStackDatalist();
     }
 
-    /**
-     * Renders the list of bookmarks based on current filters.
-     */
     function renderBookmarks() {
       try {
-        // --- NEW: Apply/remove compact-mode class ---
-        if (isCompactView) {
-            elements.bookmarksView.classList.add('compact-mode');
-        } else {
-            elements.bookmarksView.classList.remove('compact-mode');
-        }
+        if (isCompactView) elements.bookmarksView.classList.add('compact-mode');
+        else elements.bookmarksView.classList.remove('compact-mode');
       
         const searchTerm = elements.searchIn.value.toLowerCase();
         const stackFilter = elements.stackFilter.value;
 
-        // Disable/Enable Reorder Button
         if (stackFilter === "" && !isReorderMode) {
             elements.reorderBtn.disabled = false;
             elements.reorderBtn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -1176,12 +941,8 @@
             stack.toLowerCase().includes(searchTerm);
           
           let matchesStack;
-          if (stackFilter === "Favorites") {
-              matchesStack = bookmark.isFavorite;
-          } else {
-              matchesStack = !stackFilter || stack === stackFilter;
-          }
-            
+          if (stackFilter === "Favorites") matchesStack = bookmark.isFavorite;
+          else matchesStack = !stackFilter || stack === stackFilter;
           return matchesSearch && matchesStack;
         });
         
@@ -1189,11 +950,9 @@
         const totalItems = filteredBookmarks.length;
 
         if (isReorderMode) {
-            // Show all items for reordering, hide pagination
             bookmarksToRender = filteredBookmarks;
             elements.paginationControls.classList.add('hidden');
         } else {
-            // Paginate the results
             const startIndex = (currentPage - 1) * itemsPerPage;
             const endIndex = startIndex + itemsPerPage;
             bookmarksToRender = filteredBookmarks.slice(startIndex, endIndex);
@@ -1216,10 +975,25 @@
           const isFavorite = bookmark.isFavorite || false;
           const stackIcon = stackIcons.get(stack) || '';
           
+          // Determine Icon and Style based on Type
+          const isHtmlApp = bookmark.type === 'html';
+          
+          // Default Icon Logic
+          let iconHtml = '';
+          if (isHtmlApp) {
+             // Code Icon for HTML Apps
+             iconHtml = `<div class="w-8 h-8 rounded-md flex-shrink-0 bg-gray-700 flex items-center justify-center text-blue-400">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-code-2"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
+             </div>`;
+          } else {
+             // Image for Links
+             iconHtml = `<img src="${sanitize(bookmark.icon)}" class="w-8 h-8 rounded-md flex-shrink-0" alt="" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239ca3af%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 class=%22lucide lucide-globe%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22/><path d=%22M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20%22/><path d=%22M2 12h20%22/></svg>'">`;
+          }
+          
           const item = document.createElement('div');
           item.className = 'bookmark-item flex items-start gap-3 p-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition';
-          item.dataset.bookmarkId = bookmark.id; // Used for reordering
-          item.setAttribute('draggable', isReorderMode); // Make draggable
+          item.dataset.bookmarkId = bookmark.id; 
+          item.setAttribute('draggable', isReorderMode); 
           
           item.innerHTML = `
             <div class="drag-handle ${isReorderMode ? 'flex' : 'hidden'} items-center justify-center h-8 mt-1" title="Drag to reorder">
@@ -1227,10 +1001,7 @@
             </div>
             <input type="checkbox" class="bookmark-checkbox form-checkbox mt-1 ${isReorderMode ? 'hidden' : ''}" data-id="${bookmark.id}" ${isChecked}>
             
-            <img src="${sanitize(bookmark.icon)}"
-                 class="w-8 h-8 rounded-md flex-shrink-0" 
-                 alt=""
-                 onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239ca3af%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 class=%22lucide lucide-globe%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22/><path d=%22M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20%22/><path d=%22M2 12h20%22/></svg>'">
+            ${iconHtml}
             
             <div class="flex-1 min-w-0">
               <p class="text-sm font-medium truncate text-gray-100" title="${sanitize(bookmark.name)}">
@@ -1252,10 +1023,8 @@
                 </button>
                 <button class="launch-btn p-1 text-gray-400 hover:text-green-400" 
                         data-id="${bookmark.id}"
-                        data-url="${sanitize(bookmark.url)}" 
-                        data-external="${bookmark.openExternal ? 'true' : 'false'}" 
                         title="Launch">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-external-link"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                 </button>
                 <button class="edit-btn p-1 text-gray-400 hover:text-blue-400" data-id="${bookmark.id}" title="Edit">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pencil"><line x1="18" x2="22" y1="2" y2="6"/><path d="M7.5 20.5 19 9l-4-4L3.5 16.5 2 22z"/></svg>
@@ -1269,533 +1038,164 @@
           elements.bookmarksList.appendChild(item);
         });
         
-        // Add event listeners to new elements
+        // Add event listeners
         document.querySelectorAll('.launch-btn').forEach(btn => {
           btn.addEventListener('click', () => {
-            const url = btn.dataset.url;
-            const isExternal = btn.dataset.external === 'true';
             const bookmark = allBookmarks.find(b => b.id === btn.dataset.id);
-            if (bookmark) updateRecentLaunches(bookmark);
-            
-            if (globalOpenMode === 'force-external') {
-                openLinkExternally(url);
-            } else if (globalOpenMode === 'force-internal') {
-                window.open(url, '_blank', 'noopener');
-            } else { // 'default' mode
-                if (isExternal) {
-                  openLinkExternally(url);
-                } else {
-                  window.open(url, '_blank', 'noopener');
-                }
-            }
+            if (bookmark) handleLaunch(bookmark);
           });
         });
-        document.querySelectorAll('.edit-btn').forEach(btn => {
-          btn.addEventListener('click', () => handleEditClick(btn.dataset.id));
-        });
-        document.querySelectorAll('.delete-btn').forEach(btn => {
-          btn.addEventListener('click', () => handleDeleteClick(btn.dataset.id));
-        });
-        document.querySelectorAll('.bookmark-checkbox').forEach(cb => {
-          cb.addEventListener('change', () => handleCheckboxChange(cb.dataset.id, cb.checked));
-        });
-        document.querySelectorAll('.favorite-btn').forEach(btn => {
-          btn.addEventListener('click', () => handleToggleFavorite(btn.dataset.id));
-        });
+        document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', () => handleEditClick(btn.dataset.id)));
+        document.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', () => handleDeleteClick(btn.dataset.id)));
+        document.querySelectorAll('.bookmark-checkbox').forEach(cb => cb.addEventListener('change', () => handleCheckboxChange(cb.dataset.id, cb.checked)));
+        document.querySelectorAll('.favorite-btn').forEach(btn => btn.addEventListener('click', () => handleToggleFavorite(btn.dataset.id)));
         
-        updateDragDropListeners(); // Attach/detach drag/drop handlers
+        updateDragDropListeners(); 
         updateMultiSelectFooter();
-      } catch (error) {
-          logError(error, 'renderBookmarks');
-      }
+      } catch (error) { logError(error, 'renderBookmarks'); }
     }
     
-    /**
-     * Renders pagination controls.
-     * @param {number} totalItems - Total number of items after filtering.
-     */
     function renderPagination(totalItems) {
         const totalPages = Math.ceil(totalItems / itemsPerPage);
-        elements.paginationControls.innerHTML = ''; // Clear existing controls
-        
+        elements.paginationControls.innerHTML = '';
         if (totalPages <= 1) {
             elements.paginationControls.classList.add('hidden');
             return;
         }
-
         elements.paginationControls.classList.remove('hidden');
-
-        // Previous Button
-        const prevBtn = document.createElement('button');
-        prevBtn.textContent = 'Prev';
-        prevBtn.className = 'page-btn';
-        prevBtn.disabled = currentPage === 1;
-        prevBtn.addEventListener('click', () => handlePageClick(currentPage - 1));
+        const prevBtn = document.createElement('button'); prevBtn.textContent = 'Prev'; prevBtn.className = 'page-btn'; prevBtn.disabled = currentPage === 1;
+        prevBtn.addEventListener('click', () => { currentPage--; renderBookmarks(); });
         elements.paginationControls.appendChild(prevBtn);
-
-        // Page Info
-        const pageInfo = document.createElement('span');
-        pageInfo.id = 'pageInfo';
-        pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+        const pageInfo = document.createElement('span'); pageInfo.id = 'pageInfo'; pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
         elements.paginationControls.appendChild(pageInfo);
-
-        // Next Button
-        const nextBtn = document.createElement('button');
-        nextBtn.textContent = 'Next';
-        nextBtn.className = 'page-btn';
-        nextBtn.disabled = currentPage === totalPages;
-        nextBtn.addEventListener('click', () => handlePageClick(currentPage + 1));
+        const nextBtn = document.createElement('button'); nextBtn.textContent = 'Next'; nextBtn.className = 'page-btn'; nextBtn.disabled = currentPage === totalPages;
+        nextBtn.addEventListener('click', () => { currentPage++; renderBookmarks(); });
         elements.paginationControls.appendChild(nextBtn);
     }
     
-    /**
-     * Handles a click on a pagination button.
-     * @param {number} newPage - The new page number to go to.
-     */
-    function handlePageClick(newPage) {
-        currentPage = newPage;
-        renderBookmarks();
-    }
+    // --- Actions ---
     
-    /**
-     * Clears multi-select when entering reorder mode.
-     */
-    function clearMultiSelect() {
-        selectedBookmarks.clear();
-        document.querySelectorAll('.bookmark-checkbox:checked').forEach(cb => cb.checked = false);
-        updateMultiSelectFooter();
-    }
-    
-    /**
-     * Handles toggling the reorder mode.
-     */
-    async function handleReorderToggle() {
-        // Only allow reordering in "All Stacks"
-        if (elements.stackFilter.value !== "") {
-            showNotification("Reordering is only available in 'All Stacks' view.", true);
-            return;
+    // Main Launch Handler
+    function handleLaunch(bookmark) {
+        updateRecentLaunches(bookmark);
+        
+        // CODE RUNNER LOGIC
+        if (bookmark.type === 'html') {
+             const win = window.open('', '_blank');
+             if (win) {
+                 win.document.open();
+                 win.document.write(bookmark.html || '<h1>Error: No content found</h1>');
+                 win.document.close();
+             } else {
+                 showNotification("Popup blocked. Allow popups to run code.", true);
+             }
+             return;
         }
         
-        isReorderMode = !isReorderMode;
-        
-        if (isReorderMode) {
-            elements.reorderBtn.classList.add('bg-blue-600', 'hover:bg-blue-500');
-            elements.reorderBtn.classList.remove('bg-gray-700', 'hover:bg-gray-600');
-            clearMultiSelect(); // Clear selections
-            currentPage = 1; // Go to first page
-            renderBookmarks(); // Re-render in reorder state
-        } else {
-            elements.reorderBtn.classList.remove('bg-blue-600', 'hover:bg-blue-500');
-            elements.reorderBtn.classList.add('bg-gray-700', 'hover:bg-gray-600');
-            await saveNewOrder(); // Save, which re-loads and re-renders
-        }
-    }
-    
-    /**
-     * Saves the new order of bookmarks to IndexedDB.
-     */
-    async function saveNewOrder() {
-        try {
-            const items = elements.bookmarksList.querySelectorAll('.bookmark-item');
-            const updatePromises = [];
-            
-            items.forEach((item, index) => {
-                const bookmarkId = item.dataset.bookmarkId;
-                const bookmark = allBookmarks.find(b => b.id === bookmarkId);
-                
-                if (bookmark && bookmark.orderIndex !== index) {
-                    bookmark.orderIndex = index;
-                    updatePromises.push(updateBookmarkInDB(bookmark));
-                }
-            });
-            
-            if (updatePromises.length > 0) {
-                await Promise.all(updatePromises);
-                showNotification("Order saved!");
-            }
-            
-            // Full reload is safest here to guarantee sorted order
-            await loadAllBookmarks(); 
-        
-        } catch (error) {
-            logError(error, 'saveNewOrder');
-        }
-    }
-    
-    // --- Drag & Drop Event Handlers ---
-    
-    function handleDragStart(e) {
-        dragSrcEl = this;
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/html', this.innerHTML); 
-        this.classList.add('dragging');
-    }
-    
-    function handleDragOver(e) {
-        if (e.preventDefault) {
-            e.preventDefault(); 
-        }
-        this.classList.add('drag-over');
-        e.dataTransfer.dropEffect = 'move';
-        return false;
-    }
-
-    function handleDragLeave(e) {
-        this.classList.remove('drag-over');
-    }
-    
-    function handleDrop(e) {
-        if (e.stopPropagation) {
-            e.stopPropagation(); 
-        }
-        
-        if (dragSrcEl !== this) {
-            elements.bookmarksList.insertBefore(dragSrcEl, this);
-        }
-        
-        this.classList.remove('drag-over');
-        return false;
-    }
-    
-    function handleDragEnd(e) {
-        this.classList.remove('dragging');
-        elements.bookmarksList.querySelectorAll('.bookmark-item').forEach(item => {
-            item.classList.remove('drag-over');
-        });
-        dragSrcEl = null;
-    }
-    
-    /**
-     * Adds or removes drag/drop listeners based on reorder mode.
-     */
-    function updateDragDropListeners() {
-        const items = elements.bookmarksList.querySelectorAll('.bookmark-item');
-        items.forEach(item => {
-            if (isReorderMode) {
-                item.addEventListener('dragstart', handleDragStart, false);
-                item.addEventListener('dragover', handleDragOver, false);
-                item.addEventListener('dragleave', handleDragLeave, false);
-                item.addEventListener('drop', handleDrop, false);
-                item.addEventListener('dragend', handleDragEnd, false);
-            } else {
-                item.removeEventListener('dragstart', handleDragStart, false);
-                item.removeEventListener('dragover', handleDragOver, false);
-                item.removeEventListener('dragleave', handleDragLeave, false);
-                item.removeEventListener('drop', handleDrop, false);
-                item.removeEventListener('dragend', handleDragEnd, false);
-            }
-        });
-    }
-
-
-    /**
-     * Updates the stack filter dropdown with unique stacks.
-     */
-    function renderStacks() {
-      try {
-        const stacks = [...new Set(allBookmarks.map(b => b.stack || b.category || "General"))].sort();
-        
-        const currentFilter = elements.stackFilter.value;
-        
-        elements.stackFilter.innerHTML = '<option value="">All Stacks</option>';
-        elements.stackFilter.innerHTML += '<option value="Favorites">★ Favorites</option>'; // Add Favorites option
-        
-        stacks.forEach(stack => {
-          const stackIcon = stackIcons.get(stack) || '';
-          const option = document.createElement('option');
-          option.value = stack;
-          option.textContent = `${stackIcon ? `${stackIcon} ` : ''}${stack}`;
-          elements.stackFilter.appendChild(option);
-        });
-        
-        elements.stackFilter.value = currentFilter;
-      } catch (error) {
-          logError(error, 'renderStacks');
-      }
-    }
-
-    /**
-     * Updates the main stack datalist for autofill.
-     */
-    function updateMainStackDatalist() {
-        try {
-            const allStacks = [...new Set(allBookmarks.map(b => b.stack || b.category || "General"))].sort();
-            const datalistHtml = allStacks.map(s => `<option value="${sanitize(s)}"></option>`).join('');
-            
-            if (elements.mainStackDatalist) {
-                elements.mainStackDatalist.innerHTML = datalistHtml;
-            }
-        } catch (error) {
-            logError(error, 'updateMainStackDatalist');
-        }
-    }
-    
-    /**
-     * Updates the multi-select footer visibility and count.
-     */
-    function updateMultiSelectFooter() {
-      try {
-        const count = selectedBookmarks.size;
-        if (count > 0) {
-          elements.multiSelectFooter.classList.remove('hidden');
-          elements.selectedCount.textContent = `${count} selected`;
-        } else {
-          elements.multiSelectFooter.classList.add('hidden');
-        }
-      } catch (error) {
-          logError(error, 'updateMultiSelectFooter');
-      }
-    }
-    
-    /**
-     * Handles checkbox state changes for multi-select.
-     * @param {string} id - The bookmark ID.
-     * @param {boolean} isChecked - The new checked state.
-     */
-    function handleCheckboxChange(id, isChecked) {
-      try {
-        if (isChecked) {
-          selectedBookmarks.add(id);
-        } else {
-          selectedBookmarks.delete(id);
-        }
-        updateMultiSelectFooter();
-      } catch (error) {
-          logError(error, 'handleCheckboxChange');
-      }
-    }
-    
-    /**
-     * Updates the list of recently launched bookmarks.
-     * @param {object} bookmark - The bookmark that was just launched.
-     */
-    function updateRecentLaunches(bookmark) {
-        // Remove if already exists to avoid duplicates and move to top
-        recentLaunches = recentLaunches.filter(b => b.id !== bookmark.id);
-        // Add to the front
-        recentLaunches.unshift(bookmark);
-        // Keep only the top 3
-        recentLaunches = recentLaunches.slice(0, 3);
-        // Save to localStorage
-        try {
-            localStorage.setItem('cloudstax_recent', JSON.stringify(recentLaunches));
-        } catch (e) {
-            logError(e, 'updateRecentLaunches:localStorage');
-        }
-        // Re-render the list if standby mode is active
-        if (!elements.standbyPanel.classList.contains('hidden')) {
-            renderRecentLinks();
-        }
-    }
-    
-    /**
-     * Renders the recent links in the standby panel.
-     */
-    function renderRecentLinks() {
-        elements.recentLinksList.innerHTML = '';
-        if (recentLaunches.length === 0) {
-            elements.recentLinksList.innerHTML = '<p class="text-xs text-gray-500 text-center">No recent links.</p>';
-            return;
-        }
-        
-        recentLaunches.forEach(bookmark => {
-            const item = document.createElement('button');
-            item.className = 'w-full flex items-center gap-2 p-2 bg-gray-800 rounded-md hover:bg-gray-700 transition';
-            item.title = `Launch ${sanitize(bookmark.name)}\n${sanitize(bookmark.url)}`;
-            item.innerHTML = `
-                <img src="${sanitize(bookmark.icon)}"
-                     class="w-6 h-6 rounded-md flex-shrink-0" 
-                     alt=""
-                     onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239ca3af%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 class=%22lucide lucide-globe%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22/><path d=%22M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20%22/><path d=%22M2 12h20%22/></svg>'">
-                <span class="text-sm text-gray-200 truncate">${sanitize(bookmark.name)}</span>
-            `;
-            
-            item.addEventListener('click', () => {
-                if (globalOpenMode === 'force-external') {
-                    openLinkExternally(bookmark.url);
-                } else if (globalOpenMode === 'force-internal') {
-                    window.open(bookmark.url, '_blank', 'noopener');
-                } else { // 'default' mode
-                    if (bookmark.openExternal) {
-                        openLinkExternally(bookmark.url);
-                    } else {
-                        window.open(bookmark.url, '_blank', 'noopener');
-                    }
-                }
-            });
-            
-            elements.recentLinksList.appendChild(item);
-        });
-    }
-    
-    /**
-     * Toggles between the main app and standby mode.
-     * @param {boolean} showStandby - True to show standby, false to show main app.
-     */
-    function toggleStandbyMode(showStandby) {
-        if (showStandby) {
-            // Lazy-load standby animation
-            if (!hasStandbyBeenInitialized) {
-                initStandbyAnimation();
-            }
-            elements.mainAppPanel.classList.add('hidden');
-            elements.standbyPanel.classList.remove('hidden');
-            renderRecentLinks();
-            
-            // --- ELECTRON API CALL (STANDBY) ---
-            if (window.electronWindow && window.electronWindow.setProperties) {
-                window.electronWindow.setProperties({
-                    width: 350, // Based on max-w-xs (320px) + padding
-                    height: 450, // Based on max-h-[450px]
-                    resizable: false
-                });
-            }
-            // --- END ELECTRON API CALL ---
-            
-        } else {
-            elements.mainAppPanel.classList.remove('hidden');
-            elements.standbyPanel.classList.add('hidden');
-            
-            // --- ELECTRON API CALL (MAIN) ---
-            if (window.electronWindow && window.electronWindow.setProperties) {
-                window.electronWindow.setProperties({
-                    width: 1280, // Default main size from your example
-                    height: 800,  // Default main size from your example
-                    resizable: true
-                });
-            }
-            // --- END ELECTRON API CALL ---
+        // Standard Link Logic
+        if (globalOpenMode === 'force-external') {
+            openLinkExternally(bookmark.url);
+        } else if (globalOpenMode === 'force-internal') {
+            window.open(bookmark.url, '_blank', 'noopener');
+        } else { 
+            if (bookmark.openExternal) openLinkExternally(bookmark.url);
+            else window.open(bookmark.url, '_blank', 'noopener');
         }
     }
 
-    // --- Data Logic Functions ---
-
-    /**
-     * Loads all bookmarks from DB, updates state, and re-renders.
-     */
-    async function loadAllBookmarks() {
-      try {
-        allBookmarks = await getAllBookmarksFromDB();
-        // Sort by custom order first, then creation date
-        allBookmarks.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
-        refreshUI();
-      } catch (error) {
-        logError(error, 'loadAllBookmarks');
-      }
-    }
-
-    /**
-     * Adds a new bookmark.
-     */
     async function addBookmark() {
       elements.addBtn.disabled = true;
       elements.addBtn.textContent = 'Adding...';
       try {
         const rawName = elements.nameIn.value;
         const rawUrl = elements.urlIn.value;
+        const rawCode = elements.codeIn.value;
         let rawStack = elements.stackIn.value.trim();
         const openExternal = elements.openExternalIn.checked;
         const isFavorite = elements.isFavoriteIn.checked;
 
-        if (!rawUrl) {
-          showNotification("URL is required.", true);
-          return;
-        }
-        
-        let normalizedUrl;
-        try {
-          normalizedUrl = normalizeUrl(rawUrl);
-        } catch (e) {
-          showNotification(e.message, true);
-          return;
-        }
-
-        const name = extractNameFromUrl(normalizedUrl, rawName);
-        const stack = rawStack.length > 0 ? (rawStack.charAt(0).toUpperCase() + rawStack.slice(1)) : "General";
-        const icon = getFavicon(normalizedUrl);
-        
-        const newBookmark = {
-          id: crypto.randomUUID(), 
-          name,
-          url: normalizedUrl,
-          stack,
-          icon,
-          openExternal: openExternal,
-          isFavorite: isFavorite,
-          createdAt: new Date().toISOString(), 
-          orderIndex: allBookmarks.length // Add to the end
+        let newBookmark = {
+            id: crypto.randomUUID(), 
+            stack: rawStack.length > 0 ? (rawStack.charAt(0).toUpperCase() + rawStack.slice(1)) : "General",
+            isFavorite: isFavorite,
+            createdAt: new Date().toISOString(), 
+            orderIndex: allBookmarks.length 
         };
+
+        if (addInputMode === 'link') {
+            if (!rawUrl) { showNotification("URL is required.", true); return; }
+            let normalizedUrl;
+            try { normalizedUrl = normalizeUrl(rawUrl); } catch (e) { showNotification(e.message, true); return; }
+            
+            newBookmark.type = 'link';
+            newBookmark.name = extractNameFromUrl(normalizedUrl, rawName);
+            newBookmark.url = normalizedUrl;
+            newBookmark.icon = getFavicon(normalizedUrl);
+            newBookmark.openExternal = openExternal;
+        } else {
+            // CODE MODE
+            if (!rawCode.trim()) { showNotification("HTML code is required.", true); return; }
+            
+            newBookmark.type = 'html';
+            newBookmark.name = rawName || "Local Data App";
+            newBookmark.html = rawCode;
+            newBookmark.url = "app:local"; // Placeholder for UI
+            newBookmark.icon = ""; // Rendered as code icon manually
+            newBookmark.openExternal = false;
+        }
       
         await addBookmarkToDB(newBookmark);
-        showNotification("Bookmark added!");
+        showNotification("Entry added!");
         
-        // Clear inputs
         elements.nameIn.value = '';
         elements.urlIn.value = '';
+        elements.codeIn.value = '';
         elements.stackIn.value = '';
         elements.openExternalIn.checked = false;
         elements.isFavoriteIn.checked = false;
-
-        // --- OPTIMIZATION ---
-        // Manually update in-memory state and refresh UI
+        
+        // Switch back to link mode for convenience? No, let user stay in mode.
+        
         allBookmarks.push(newBookmark);
         refreshUI();
-        // --- END OPTIMIZATION ---
-      } catch (error) {
-        logError(error, "addBookmark");
-      } finally {
+      } catch (error) { logError(error, "addBookmark"); } 
+      finally {
         elements.addBtn.disabled = false;
         elements.addBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg> Add`;
       }
     }
     
-    function handleDeleteClick(id) {
-      try {
-        const bookmark = allBookmarks.find(b => b.id === id);
-        if (!bookmark) return;
-
-        const body = `<p>Are you sure you want to delete this bookmark?</p>
-                      <p class="font-medium text-gray-100 mt-2">${sanitize(bookmark.name)}</p>`;
-        
-        const footer = `
-          <button id="cancelDelete" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
-          <button id="confirmDelete" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-md text-sm font-medium transition">Delete</button>
-        `;
-        
-        showModal("Delete Bookmark", body, footer);
-        
-        $('cancelDelete').addEventListener('click', hideModal);
-        $('confirmDelete').addEventListener('click', async () => {
-          try {
-            await deleteBookmarkFromDB(id);
-            selectedBookmarks.delete(id);
-            updateMultiSelectFooter();
-            showNotification("Bookmark deleted.");
-            
-            // --- OPTIMIZATION ---
-            allBookmarks = allBookmarks.filter(b => b.id !== id);
-            refreshUI();
-            // --- END OPTIMIZATION ---
-          } catch (error) {
-            logError(error, "handleDeleteClick:confirm");
-          } finally {
-            hideModal();
-          }
-        });
-      } catch (error) {
-          logError(error, "handleDeleteClick");
-      }
-    }
-
     function handleEditClick(id) {
       try {
         const bookmark = allBookmarks.find(b => b.id === id);
         if (!bookmark) return;
-        
         const stack = bookmark.stack || bookmark.category || "General";
-        
         const allStacks = [...new Set(allBookmarks.map(b => b.stack || b.category || "General"))].sort();
         const datalistHtml = allStacks.map(s => `<option value="${sanitize(s)}"></option>`).join('');
+        
+        const isHtmlApp = bookmark.type === 'html';
+
+        // Conditional HTML for URL input vs Code Textarea
+        let contentInputHtml = '';
+        if (isHtmlApp) {
+             contentInputHtml = `
+                <div>
+                  <label class="text-xs text-gray-400">HTML Code</label>
+                  <textarea id="editCodeIn" class="w-full text-sm bg-gray-700 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono h-32 resize-y">${escapeHtml(bookmark.html || '')}</textarea>
+                </div>
+             `;
+        } else {
+             contentInputHtml = `
+                <div>
+                  <label class="text-xs text-gray-400">URL</label>
+                  <input id="editUrlIn" value="${sanitize(bookmark.url)}" class="w-full text-sm bg-gray-700 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="flex items-center pt-2">
+                  <input id="editOpenExternalIn" type="checkbox" class="form-checkbox" ${bookmark.openExternal ? 'checked' : ''}>
+                  <label for="editOpenExternalIn" class="ml-2 text-sm text-gray-300 select-none">Open in default browser</label>
+                </div>
+             `;
+        }
 
         const body = `
           <div class="space-y-3">
@@ -1803,20 +1203,11 @@
               <label class="text-xs text-gray-400">Name</label>
               <input id="editNameIn" value="${sanitize(bookmark.name)}" class="w-full text-sm bg-gray-700 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
-            <div>
-              <label class="text-xs text-gray-400">URL</label>
-              <input id="editUrlIn" value="${sanitize(bookmark.url)}" class="w-full text-sm bg-gray-700 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
+            ${contentInputHtml}
             <div>
               <label class="text-xs text-gray-400">Stack</label>
               <input id="editStackIn" value="${sanitize(stack)}" list="existingStacks" class="w-full text-sm bg-gray-700 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <datalist id="existingStacks">
-                ${datalistHtml}
-              </datalist>
-            </div>
-            <div class="flex items-center pt-2">
-              <input id="editOpenExternalIn" type="checkbox" class="form-checkbox" ${bookmark.openExternal ? 'checked' : ''}>
-              <label for="editOpenExternalIn" class="ml-2 text-sm text-gray-300 select-none">Open in default browser</label>
+              <datalist id="existingStacks">${datalistHtml}</datalist>
             </div>
             <div class="flex items-center pt-2">
               <input id="editIsFavoriteIn" type="checkbox" class="form-checkbox" ${bookmark.isFavorite ? 'checked' : ''}>
@@ -1830,134 +1221,213 @@
           <button id="confirmUpdate" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition" data-id="${id}">Save Changes</button>
         `;
 
-        showModal("Edit Bookmark", body, footer);
-        
+        showModal("Edit Entry", body, footer);
         $('cancelUpdate').addEventListener('click', hideModal);
         $('confirmUpdate').addEventListener('click', (e) => updateBookmark(e.target.dataset.id));
-      } catch (error) {
-          logError(error, "handleEditClick");
-      }
+      } catch (error) { logError(error, "handleEditClick"); }
     }
     
     async function updateBookmark(id) {
       try {
         const bookmark = allBookmarks.find(b => b.id === id);
         if (!bookmark) return;
-      
-        const rawName = $('editNameIn').value;
-        const rawUrl = $('editUrlIn').value;
-        let rawStack = $('editStackIn').value.trim();
-        const openExternal = $('editOpenExternalIn').checked; 
-        const isFavorite = $('editIsFavoriteIn').checked;
         
-        let normalizedUrl;
-        try {
-          normalizedUrl = normalizeUrl(rawUrl);
-        } catch (e) {
-          showNotification(e.message, true);
-          return;
+        const isHtmlApp = bookmark.type === 'html';
+        const rawName = $('editNameIn').value;
+        let rawStack = $('editStackIn').value.trim();
+        const isFavorite = $('editIsFavoriteIn').checked;
+        const stack = rawStack.length > 0 ? (rawStack.charAt(0).toUpperCase() + rawStack.slice(1)) : "General";
+
+        let updatedData = { ...bookmark, name: rawName, stack: stack, isFavorite: isFavorite };
+
+        if (isHtmlApp) {
+             const rawCode = $('editCodeIn').value;
+             updatedData.html = rawCode;
+        } else {
+             const rawUrl = $('editUrlIn').value;
+             const openExternal = $('editOpenExternalIn').checked;
+             let normalizedUrl;
+             try { normalizedUrl = normalizeUrl(rawUrl); } catch (e) { showNotification(e.message, true); return; }
+             updatedData.url = normalizedUrl;
+             updatedData.openExternal = openExternal;
+             updatedData.icon = getFavicon(normalizedUrl);
         }
         
-        const name = extractNameFromUrl(normalizedUrl, rawName);
-        const stack = rawStack.length > 0 ? (rawStack.charAt(0).toUpperCase() + rawStack.slice(1)) : "General";
-        const icon = getFavicon(normalizedUrl);
-        
-        const updatedData = {
-          ...bookmark, // Preserve ID, createdAt, and orderIndex
-          name,
-          url: normalizedUrl,
-          stack,
-          icon,
-          openExternal: openExternal,
-          isFavorite: isFavorite
-        };
-        
         await updateBookmarkInDB(updatedData);
-        showNotification("Bookmark updated!");
-        
-        // --- OPTIMIZATION ---
+        showNotification("Updated!");
         const index = allBookmarks.findIndex(b => b.id === id);
         if (index !== -1) allBookmarks[index] = updatedData;
         refreshUI();
-        // --- END OPTIMIZATION ---
-      } catch (error) {
-        logError(error, "updateBookmark");
-      } finally {
-        hideModal();
-      }
+      } catch (error) { logError(error, "updateBookmark"); } finally { hideModal(); }
     }
-    
-    /**
-     * Toggles the favorite status of a bookmark.
-     */
+
+    // --- Other Handlers (Delete, Favorite, Multi-Select) ---
+    function handleDeleteClick(id) {
+      try {
+        const bookmark = allBookmarks.find(b => b.id === id);
+        if (!bookmark) return;
+        const body = `<p>Delete "${sanitize(bookmark.name)}"?</p>`;
+        const footer = `<button id="cancelDelete" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button><button id="confirmDelete" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-md text-sm font-medium transition">Delete</button>`;
+        showModal("Delete", body, footer);
+        $('cancelDelete').addEventListener('click', hideModal);
+        $('confirmDelete').addEventListener('click', async () => {
+          await deleteBookmarkFromDB(id);
+          selectedBookmarks.delete(id);
+          showNotification("Deleted.");
+          allBookmarks = allBookmarks.filter(b => b.id !== id);
+          refreshUI();
+          hideModal();
+        });
+      } catch (error) { logError(error, "handleDeleteClick"); }
+    }
     async function handleToggleFavorite(id) {
         try {
             const bookmark = allBookmarks.find(b => b.id === id);
             if (!bookmark) return;
-
             bookmark.isFavorite = !bookmark.isFavorite; 
-            
-            const updatedData = {
-                ...bookmark,
-                isFavorite: bookmark.isFavorite
-            };
-            
-            await updateBookmarkInDB(updatedData);
-            // No full reload, just refresh the UI from memory
+            await updateBookmarkInDB(bookmark);
             refreshUI();
-            
-        } catch (error) {
-            logError(error, "handleToggleFavorite");
+        } catch (error) { logError(error, "handleToggleFavorite"); }
+    }
+    function handleCheckboxChange(id, isChecked) {
+      if (isChecked) selectedBookmarks.add(id); else selectedBookmarks.delete(id);
+      updateMultiSelectFooter();
+    }
+    function updateMultiSelectFooter() {
+        const count = selectedBookmarks.size;
+        if (count > 0) {
+          elements.multiSelectFooter.classList.remove('hidden');
+          elements.selectedCount.textContent = `${count} selected`;
+        } else elements.multiSelectFooter.classList.add('hidden');
+    }
+    function launchSelected() {
+      if (selectedBookmarks.size === 0) return;
+      selectedBookmarks.forEach(id => {
+        const bookmark = allBookmarks.find(b => b.id === id);
+        if (bookmark) handleLaunch(bookmark);
+      });
+      showNotification(`Launched ${selectedBookmarks.size} apps.`);
+      selectedBookmarks.clear();
+      updateMultiSelectFooter();
+      refreshUI();
+    }
+    function clearMultiSelect() {
+        selectedBookmarks.clear();
+        updateMultiSelectFooter();
+    }
+    async function handleReorderToggle() {
+        if (elements.stackFilter.value !== "") { showNotification("Reordering is only available in 'All Stacks' view.", true); return; }
+        isReorderMode = !isReorderMode;
+        if (isReorderMode) {
+            elements.reorderBtn.classList.add('bg-blue-600', 'hover:bg-blue-500');
+            elements.reorderBtn.classList.remove('bg-gray-700', 'hover:bg-gray-600');
+            clearMultiSelect(); currentPage = 1; renderBookmarks();
+        } else {
+            elements.reorderBtn.classList.remove('bg-blue-600', 'hover:bg-blue-500');
+            elements.reorderBtn.classList.add('bg-gray-700', 'hover:bg-gray-600');
+            await saveNewOrder();
         }
     }
-    
-    /**
-     * Handles launching all selected bookmarks.
-     */
-    function launchSelected() {
-      try {
-        if (selectedBookmarks.size === 0) return;
-        
-        let launchedCount = 0;
-        
-        selectedBookmarks.forEach(id => {
-          const bookmark = allBookmarks.find(b => b.id === id);
-          if (bookmark) {
-            updateRecentLaunches(bookmark); // Update recent for each
-            
-            if (globalOpenMode === 'force-external') {
-                openLinkExternally(bookmark.url);
-            } else if (globalOpenMode === 'force-internal') {
-                window.open(bookmark.url, '_blank', 'noopener');
-            } else { // 'default' mode
-                if (bookmark.openExternal) {
-                  openLinkExternally(bookmark.url);
-                } else {
-                  window.open(bookmark.url, '_blank', 'noopener');
+    async function saveNewOrder() {
+        try {
+            const items = elements.bookmarksList.querySelectorAll('.bookmark-item');
+            const updatePromises = [];
+            items.forEach((item, index) => {
+                const bookmarkId = item.dataset.bookmarkId;
+                const bookmark = allBookmarks.find(b => b.id === bookmarkId);
+                if (bookmark && bookmark.orderIndex !== index) {
+                    bookmark.orderIndex = index;
+                    updatePromises.push(updateBookmarkInDB(bookmark));
                 }
+            });
+            if (updatePromises.length > 0) { await Promise.all(updatePromises); showNotification("Order saved!"); }
+            await loadAllBookmarks(); 
+        } catch (error) { logError(error, 'saveNewOrder'); }
+    }
+    // Drag & Drop Handlers
+    function handleDragStart(e) { dragSrcEl = this; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/html', this.innerHTML); this.classList.add('dragging'); }
+    function handleDragOver(e) { if (e.preventDefault) e.preventDefault(); this.classList.add('drag-over'); e.dataTransfer.dropEffect = 'move'; return false; }
+    function handleDragLeave(e) { this.classList.remove('drag-over'); }
+    function handleDrop(e) { if (e.stopPropagation) e.stopPropagation(); if (dragSrcEl !== this) elements.bookmarksList.insertBefore(dragSrcEl, this); this.classList.remove('drag-over'); return false; }
+    function handleDragEnd(e) { this.classList.remove('dragging'); elements.bookmarksList.querySelectorAll('.bookmark-item').forEach(item => item.classList.remove('drag-over')); dragSrcEl = null; }
+    function updateDragDropListeners() {
+        const items = elements.bookmarksList.querySelectorAll('.bookmark-item');
+        items.forEach(item => {
+            if (isReorderMode) {
+                item.addEventListener('dragstart', handleDragStart, false); item.addEventListener('dragover', handleDragOver, false);
+                item.addEventListener('dragleave', handleDragLeave, false); item.addEventListener('drop', handleDrop, false);
+                item.addEventListener('dragend', handleDragEnd, false);
+            } else {
+                item.removeEventListener('dragstart', handleDragStart); item.removeEventListener('dragover', handleDragOver);
+                item.removeEventListener('dragleave', handleDragLeave); item.removeEventListener('drop', handleDrop);
+                item.removeEventListener('dragend', handleDragEnd);
             }
-            launchedCount++;
-          }
         });
-        
-        showNotification(`Launched ${launchedCount} bookmarks.`);
-        
-        // Clear selection
-        selectedBookmarks.clear();
-        document.querySelectorAll('.bookmark-checkbox:checked').forEach(cb => cb.checked = false);
-        updateMultiSelectFooter();
-      } catch (error) {
-          logError(error, "launchSelected");
-      }
     }
 
-    /**
-     * Parses an HTML page to find all <a> tags and extract their hrefs.
-     * @param {string} htmlString - The string content of the HTML page.
-     * @param {string} stackName - The name of the stack to assign.
-     * @param {string} [baseUrl] - The base URL for resolving relative links.
-     * @returns {Array} An array of bookmark objects.
-     */
+    function renderStacks() {
+        const stacks = [...new Set(allBookmarks.map(b => b.stack || b.category || "General"))].sort();
+        const currentFilter = elements.stackFilter.value;
+        elements.stackFilter.innerHTML = '<option value="">All Stacks</option><option value="Favorites">★ Favorites</option>';
+        stacks.forEach(stack => {
+          const stackIcon = stackIcons.get(stack) || '';
+          const option = document.createElement('option');
+          option.value = stack;
+          option.textContent = `${stackIcon ? `${stackIcon} ` : ''}${stack}`;
+          elements.stackFilter.appendChild(option);
+        });
+        elements.stackFilter.value = currentFilter;
+    }
+    function updateMainStackDatalist() {
+        const allStacks = [...new Set(allBookmarks.map(b => b.stack || b.category || "General"))].sort();
+        if (elements.mainStackDatalist) elements.mainStackDatalist.innerHTML = allStacks.map(s => `<option value="${sanitize(s)}"></option>`).join('');
+    }
+    
+    // --- History / Standby ---
+    function updateRecentLaunches(bookmark) {
+        recentLaunches = recentLaunches.filter(b => b.id !== bookmark.id);
+        recentLaunches.unshift(bookmark);
+        recentLaunches = recentLaunches.slice(0, 3);
+        try { localStorage.setItem('cloudstax_recent', JSON.stringify(recentLaunches)); } catch (e) {}
+        if (!elements.standbyPanel.classList.contains('hidden')) renderRecentLinks();
+    }
+    function renderRecentLinks() {
+        elements.recentLinksList.innerHTML = '';
+        if (recentLaunches.length === 0) { elements.recentLinksList.innerHTML = '<p class="text-xs text-gray-500 text-center">No recent links.</p>'; return; }
+        recentLaunches.forEach(bookmark => {
+            const item = document.createElement('button');
+            item.className = 'w-full flex items-center gap-2 p-2 bg-gray-800 rounded-md hover:bg-gray-700 transition';
+            item.title = `Launch ${sanitize(bookmark.name)}`;
+            const isHtml = bookmark.type === 'html';
+            const icon = isHtml 
+                ? `<div class="w-6 h-6 rounded-md bg-gray-700 flex items-center justify-center text-blue-400"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg></div>` 
+                : `<img src="${sanitize(bookmark.icon)}" class="w-6 h-6 rounded-md flex-shrink-0" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%239ca3af%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 class=%22lucide lucide-globe%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22/><path d=%22M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20%22/><path d=%22M2 12h20%22/></svg>'">`;
+            
+            item.innerHTML = `${icon}<span class="text-sm text-gray-200 truncate">${sanitize(bookmark.name)}</span>`;
+            item.addEventListener('click', () => handleLaunch(bookmark));
+            elements.recentLinksList.appendChild(item);
+        });
+    }
+    function toggleStandbyMode(showStandby) {
+        if (showStandby) {
+            if (!hasStandbyBeenInitialized) initStandbyAnimation();
+            elements.mainAppPanel.classList.add('hidden'); elements.standbyPanel.classList.remove('hidden'); renderRecentLinks();
+            if (window.electronWindow?.setProperties) window.electronWindow.setProperties({ width: 350, height: 450, resizable: false });
+        } else {
+            elements.mainAppPanel.classList.remove('hidden'); elements.standbyPanel.classList.add('hidden');
+            if (window.electronWindow?.setProperties) window.electronWindow.setProperties({ width: 1280, height: 800, resizable: true });
+        }
+    }
+
+    async function loadAllBookmarks() {
+      try {
+        allBookmarks = await getAllBookmarksFromDB();
+        allBookmarks.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+        refreshUI();
+      } catch (error) { logError(error, 'loadAllBookmarks'); }
+    }
+    
+    // --- Helper for HTML Parsing ---
     function parseLinksFromHtml(htmlString, stackName, baseUrl) {
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlString, 'text/html');
@@ -1991,969 +1461,258 @@
           }
         }
       });
-      
       return bookmarks;
     }
+
+    // --- Import / Export ---
+    function exportBookmarks() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(allBookmarks, null, 2));
+        const a = document.createElement('a'); a.href = dataStr; a.download = `cloudstax_backup_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a); a.click(); a.remove();
+        showNotification("Exported.");
+    }
+    function handleImportJson() {
+        showModal("Import JSON", `<p class="text-sm text-gray-300">Choose import method:</p><div class="mt-3"><label class="flex items-center"><input type="radio" name="import-mode" value="append" class="form-radio" checked><span class="ml-2 text-sm text-gray-300">Append</span></label><label class="flex items-center"><input type="radio" name="import-mode" value="merge" class="form-radio"><span class="ml-2 text-sm text-gray-300">Merge (Skip duplicates)</span></label></div>`, `<button id="importFile" class="px-4 py-2 bg-blue-600 rounded-md text-sm">Choose File</button>`);
+        $('importFile').onclick = () => {
+            const mode = document.querySelector('input[name="import-mode"]:checked').value;
+            const input = document.createElement('input'); input.type = 'file'; input.accept = '.json';
+            input.onchange = e => {
+                const reader = new FileReader();
+                reader.onload = async event => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        if(!Array.isArray(data)) throw new Error("Invalid format");
+                        const existing = new Set(allBookmarks.map(b => b.url));
+                        const toImport = [];
+                        data.forEach(item => {
+                            if(mode === 'merge' && item.url && existing.has(item.url)) return;
+                            toImport.push({
+                                ...item, id: crypto.randomUUID(), 
+                                orderIndex: allBookmarks.length + toImport.length
+                            });
+                        });
+                        if(toImport.length > 0) { await batchImportToDB(toImport); await loadAllBookmarks(); showNotification(`Imported ${toImport.length} items.`); }
+                        else showNotification("No new items.");
+                        hideModal();
+                    } catch(err) { showNotification("Import failed.", true); }
+                };
+                reader.readAsText(e.target.files[0]);
+            };
+            input.click();
+        }
+    }
     
-    /**
-     * Shows a small modal to quickly paste and grab a link.
-     */
+    // --- Install Tools Logic ---
+    async function handleInstallTools() {
+      const toolsUrl = 'https://junkyardai.github.io/Cloudstax-Default-Tools/';
+      const body = `<p class="text-sm text-gray-300">This will install the default Cloudstax tools from:</p><p class="text-sm text-blue-400 truncate my-2">${sanitize(toolsUrl)}</p><p class="text-sm text-gray-300">They will be added to a new stack called "Cloudstax Tools".</p>`;
+      const footer = `<button id="cancelInstall" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button><button id="confirmInstall" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">Confirm Install</button>`;
+      showModal("Install Cloudstax Tools", body, footer);
+      $('cancelInstall').onclick = hideModal;
+      $('confirmInstall').onclick = async () => {
+        try {
+          const confirmBtn = $('confirmInstall'); confirmBtn.disabled = true; confirmBtn.textContent = 'Installing...';
+          const response = await fetch(toolsUrl);
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          const htmlText = await response.text();
+          const bookmarksToImport = parseLinksFromHtml(htmlText, "Cloudstax Tools", toolsUrl);
+          if (bookmarksToImport.length > 0) { await batchImportToDB(bookmarksToImport); showNotification(`Successfully installed ${bookmarksToImport.length} tools.`); await loadAllBookmarks(); } 
+          else showNotification('No tools found.', true);
+        } catch (error) { logError(error, 'handleInstallTools'); } finally { hideModal(); }
+      };
+    }
+
+    // --- Quick Grab Logic ---
     function handleQuickGrabModal() {
       const allStacks = [...new Set(allBookmarks.map(b => b.stack || b.category || "General"))].sort();
       const datalistHtml = allStacks.map(s => `<option value="${sanitize(s)}"></option>`).join('');
-        
-      const body = `
-        <p class="text-sm text-gray-300 mb-2">Paste your link below and press Enter.</p>
-        <input id="quickGrabInput" class="w-full text-sm bg-gray-900 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://...">
-        
-        <label class="text-xs text-gray-400 mt-3 mb-1 block">Stack (optional)</label>
-        <input id="quickGrabStackInput" class="w-full text-sm bg-gray-900 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Quick Stack" list="quickGrabStacks">
-        <datalist id="quickGrabStacks">
-          ${datalistHtml}
-        </datalist>
-      `;
-      const footer = `
-        <button id="cancelQuickGrab" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
-        <button id="confirmQuickGrab" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">Grab Link</button>
-      `;
-      
+      const body = `<p class="text-sm text-gray-300 mb-2">Paste your link below and press Enter.</p><input id="quickGrabInput" class="w-full text-sm bg-gray-900 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://..."><label class="text-xs text-gray-400 mt-3 mb-1 block">Stack (optional)</label><input id="quickGrabStackInput" class="w-full text-sm bg-gray-900 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Quick Stack" list="quickGrabStacks"><datalist id="quickGrabStacks">${datalistHtml}</datalist>`;
+      const footer = `<button id="cancelQuickGrab" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button><button id="confirmQuickGrab" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">Grab Link</button>`;
       showModal("Quick Grab", body, footer);
-      
-      const input = $('quickGrabInput');
-      const stackInput = $('quickGrabStackInput');
-      input.focus(); 
-      
+      const input = $('quickGrabInput'); const stackInput = $('quickGrabStackInput'); input.focus(); 
       const grabFunc = async () => {
         const text = input.value;
-        const stackInputValue = stackInput.value.trim();
-        const stackName = stackInputValue.length > 0 ? (stackInputValue.charAt(0).toUpperCase() + stackInputValue.slice(1)) : "Quick Stack";
-
-        if (await processQuickGrabPaste(text, stackName)) {
-            hideModal(); 
-        } else {
-            showNotification("No valid link found.", true);
-            input.focus();
-            input.select();
-        }
+        const stackName = stackInput.value.trim().length > 0 ? (stackInput.value.trim().charAt(0).toUpperCase() + stackInput.value.trim().slice(1)) : "Quick Stack";
+        if (await processQuickGrabPaste(text, stackName)) hideModal(); else { showNotification("No valid link found.", true); input.focus(); input.select(); }
       };
-      
-      $('cancelQuickGrab').addEventListener('click', hideModal);
-      $('confirmQuickGrab').addEventListener('click', grabFunc);
-      
-      input.addEventListener('keydown', e => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            grabFunc();
-        }
-      });
-      stackInput.addEventListener('keydown', e => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            grabFunc();
-        }
-      });
+      $('cancelQuickGrab').onclick = hideModal; $('confirmQuickGrab').onclick = grabFunc;
+      input.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); grabFunc(); } };
+      stackInput.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); grabFunc(); } };
     }
-    
-    /**
-     * Helper function to process a single-link grab
-     * @param {string} text - The string from the clipboard
-     * @param {string} [stackName="Quick Stack"] - The stack to add links to
-     * @returns {boolean} - True if successful, false if not
-     */
-     async function processQuickGrabPaste(text, stackName = "Quick Stack") {
-        if (!text || !text.trim()) {
-            return false;
-        }
-
+    async function processQuickGrabPaste(text, stackName = "Quick Stack") {
+        if (!text || !text.trim()) return false;
         const lines = text.split('\n').filter(line => line.trim().length > 0);
-        if (lines.length === 0) {
-            return false;
-        }
-
+        if (lines.length === 0) return false;
         let addedCount = 0;
-        let failedCount = 0;
-        
-        const lineToProcess = lines[0];
-
-        let normalizedUrl;
+        let lineToProcess = lines[0];
         try {
-            normalizedUrl = normalizeUrl(lineToProcess);
-        } catch (e) {
-            logError(e, `processQuickGrab (Skipped: ${lineToProcess})`);
-            failedCount++;
-            return false; 
-        }
-
-        const name = extractNameFromUrl(normalizedUrl, '');
-        const stack = stackName; 
-        const icon = getFavicon(normalizedUrl);
-        
-        const newBookmark = {
-            id: crypto.randomUUID(),
-            name,
-            url: normalizedUrl,
-            stack,
-            icon,
-            openExternal: false,
-            isFavorite: false,
-            createdAt: new Date().toISOString(),
-            orderIndex: allBookmarks.length 
-        };
-
-        try {
-            await addBookmarkToDB(newBookmark);
+            let normalizedUrl = normalizeUrl(lineToProcess);
+            let name = extractNameFromUrl(normalizedUrl, '');
+            await addBookmarkToDB({ id: crypto.randomUUID(), name, url: normalizedUrl, stack: stackName, icon: getFavicon(normalizedUrl), openExternal: false, isFavorite: false, createdAt: new Date().toISOString(), orderIndex: allBookmarks.length });
             addedCount++;
-        } catch (error) {
-            logError(error, `processQuickGrab (Failed to add: ${lineToProcess})`);
-            failedCount++;
-        }
-
-        if (addedCount > 0) {
-            showNotification(`Added 1 bookmark to ${stackName}.`);
-            allBookmarks.push(newBookmark);
-            refreshUI();
-        }
-        if (failedCount > 0) {
-            showNotification(`Link failed to import. Check log.`, true);
-        }
-        
+        } catch (e) { logError(e, `processQuickGrab`); }
+        if (addedCount > 0) { showNotification(`Added 1 bookmark to ${stackName}.`); await loadAllBookmarks(); }
         return addedCount > 0;
     }
-
-    /**
-     * Handles the Install Tools button click
-     */
-    async function handleInstallTools() {
-      const toolsUrl = 'https://junkyardai.github.io/Cloudstax-Default-Tools/';
-      
-      const body = `
-        <p class="text-sm text-gray-300">This will install the default Cloudstax tools from:</p>
-        <p class="text-sm text-blue-400 truncate my-2">${sanitize(toolsUrl)}</p>
-        <p class="text-sm text-gray-300">They will be added to a new stack called "Cloudstax Tools".</p>
-      `;
-      const footer = `
-        <button id="cancelInstall" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
-        <button id="confirmInstall" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">Confirm Install</button>
-      `;
-      
-      showModal("Install Cloudstax Tools", body, footer);
-      
-      $('cancelInstall').addEventListener('click', hideModal);
-      $('confirmInstall').addEventListener('click', async () => {
-        try {
-          const confirmBtn = $('confirmInstall');
-          confirmBtn.disabled = true;
-          confirmBtn.textContent = 'Installing...';
-
-          const response = await fetch(toolsUrl);
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status} - Could not fetch tools from ${toolsUrl}`);
-          }
-          const htmlText = await response.text();
-          
-          const bookmarksToImport = parseLinksFromHtml(htmlText, "Cloudstax Tools", toolsUrl);
-
-          if (bookmarksToImport.length > 0) {
-             await batchImportToDB(bookmarksToImport);
-             showNotification(`Successfully installed ${bookmarksToImport.length} tools.`);
-             await loadAllBookmarks(); 
-          } else {
-            showNotification('Tools file was empty or no valid links were found.', true);
-          }
-        } catch (error) {
-          logError(error, 'handleInstallTools');
-        } finally {
-          hideModal(); 
-        }
-      });
-    }
     
-    /**
-     * Handles exporting bookmarks to a JSON file.
-     */
-    function exportBookmarks() {
-      try {
-        if (allBookmarks.length === 0) {
-          showNotification("No bookmarks to export.", true);
-          return;
-        }
-        
-        const exportData = allBookmarks.map(b => ({
-          name: b.name,
-          url: b.url,
-          stack: b.stack || "General",
-          openExternal: b.openExternal || false,
-          isFavorite: b.isFavorite || false,
-          createdAt: b.createdAt,
-          orderIndex: b.orderIndex
-        }));
-        
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
-        const downloadAnchor = document.createElement('a');
-        downloadAnchor.setAttribute("href", dataStr);
-        downloadAnchor.setAttribute("download", `cloudstax_backup_${new Date().toISOString().split('T')[0]}.json`);
-        document.body.appendChild(downloadAnchor); 
-        downloadAnchor.click();
-        downloadAnchor.remove();
-        
-        showNotification("Bookmarks exported.");
-      } catch (error) {
-        logError(error, 'exportBookmarks');
-      }
-    }
-    
-    /**
-     * --- MODIFIED: Added Merge/Append logic ---
-     * Handles importing bookmarks from a JSON backup file.
-     */
-    function handleImportJson() {
-        // 1. Show confirmation with merge/append options
-        const body = `
-            <p class="text-sm text-gray-300">Choose an import method for your JSON backup.</p>
-            <div class="space-y-2 mt-3">
-                <label class="flex items-center">
-                    <input type="radio" name="import-mode" value="append" class="form-radio" checked>
-                    <span class="ml-2 text-sm text-gray-300">Append (Add all bookmarks, may create duplicates)</span>
-                </label>
-                <label class="flex items-center">
-                    <input type="radio" name="import-mode" value="merge" class="form-radio">
-                    <span class="ml-2 text-sm text-gray-300">Merge (Skip bookmarks if URL already exists)</span>
-                </label>
-            </div>
-        `;
-        const footer = `
-            <button id="cancelImport" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
-            <button id="confirmImport" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">Choose File & Import</button>
-        `;
-        showModal("Import from JSON Backup", body, footer);
-        
-        $('cancelImport').addEventListener('click', hideModal);
-        $('confirmImport').addEventListener('click', () => {
-            // --- NEW: Get the selected import mode ---
-            const importMode = document.querySelector('input[name="import-mode"]:checked').value;
-            hideModal();
-            
-            // 2. Open file picker
-            const fileInput = document.createElement('input');
-            fileInput.type = 'file';
-            fileInput.accept = '.json,application/json';
-            
-            fileInput.onchange = e => {
-                const file = e.target.files[0];
-                if (!file) return;
-                
-                const reader = new FileReader();
-                reader.onload = async (event) => {
-                    try {
-                        const jsonText = event.target.result;
-                        const importedData = JSON.parse(jsonText);
-                        
-                        if (!Array.isArray(importedData)) {
-                            throw new Error("Invalid file format. Expected a JSON array.");
-                        }
-                        
-                        // --- NEW: Create a Set of existing URLs for merge check ---
-                        const existingUrls = new Set(allBookmarks.map(b => b.url));
-                        let skippedCount = 0;
-                        
-                        const currentCount = allBookmarks.length;
-                        const bookmarksToImport = [];
-                        
-                        importedData.forEach((item, index) => {
-                            if (item && item.name && item.url) {
-                                const stack = item.stack || "General";
-                                const normalizedUrl = normalizeUrl(item.url); 
-                                
-                                // --- NEW: Merge logic check ---
-                                if (importMode === 'merge' && existingUrls.has(normalizedUrl)) {
-                                    skippedCount++;
-                                    return; // Skip this duplicate
-                                }
-                                
-                                bookmarksToImport.push({
-                                  name: String(item.name),
-                                  url: normalizedUrl,
-                                  stack: String(stack),
-                                  icon: getFavicon(normalizedUrl),
-                                  openExternal: !!item.openExternal,
-                                  isFavorite: !!item.isFavorite,
-                                  createdAt: item.createdAt || new Date().toISOString(),
-                                  id: crypto.randomUUID(),
-                                  orderIndex: item.orderIndex ?? (currentCount + index)
-                                });
-                            }
-                        });
-
-                        if (bookmarksToImport.length > 0) {
-                           await batchImportToDB(bookmarksToImport);
-                           // --- NEW: Updated notification ---
-                           showNotification(`Imported ${bookmarksToImport.length} bookmarks. ${skippedCount > 0 ? `Skipped ${skippedCount} duplicates.` : ''}`);
-                           await loadAllBookmarks(); // Full reload
-                        } else {
-                          showNotification(`No new bookmarks to import. ${skippedCount > 0 ? `Skipped ${skippedCount} duplicates.` : ''}`, skippedCount === 0);
-                        }
-                    } catch (error) {
-                        logError(error, 'handleImportJson:fileread');
-                        showNotification(`Import failed: ${error.message}`, true);
-                    }
-                };
-                reader.readAsText(file);
-            };
-            fileInput.click();
-        });
-    }
-    
-    /**
-     * Handles importing a Stack Preset HTML file.
-     */
-    function handleImportStackPreset() {
-        // 1. Ask for stack name
-        const body = `
-            <p class="text-sm text-gray-300 mb-2">Please enter a name for this new stack (e.g., "Design Tools").</p>
-            <input id="importStackName" class="w-full text-sm bg-gray-900 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="New Stack Name">
-        `;
-        const footer = `
-            <button id="cancelImport" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
-            <button id="nextImport" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">Next</button>
-        `;
-        showModal("Import Stack Preset (HTML)", body, footer);
-        
-        const input = $('importStackName');
-        input.focus();
-        
-        $('cancelImport').addEventListener('click', hideModal);
-        $('nextImport').addEventListener('click', () => {
-            const stackNameRaw = input.value.trim();
-            if (!stackNameRaw) {
-                showNotification("Stack name is required.", true);
-                return;
-            }
-            const stackName = stackNameRaw.charAt(0).toUpperCase() + stackNameRaw.slice(1);
-            
-            hideModal(); 
-            
-            // 2. Open file picker
-            const fileInput = document.createElement('input');
-            fileInput.type = 'file';
-            fileInput.accept = '.html,text/html';
-            fileInput.onchange = e => {
-                const file = e.target.files[0];
-                if (!file) return;
-                
-                const reader = new FileReader();
-                reader.onload = async (event) => {
-                    try {
-                        const htmlText = event.target.result;
-                        const bookmarksToImport = parseLinksFromHtml(htmlText, stackName); 
-
-                        if (bookmarksToImport.length > 0) {
-                           await batchImportToDB(bookmarksToImport);
-                           showNotification(`Successfully imported ${bookmarksToImport.length} links to "${stackName}".`);
-                           await loadAllBookmarks(); 
-                        } else {
-                          showNotification('File was empty or no valid links were found.', true);
-                        }
-                    } catch (error) {
-                        logError(error, 'handleImportStackPreset:fileread');
-                    }
-                };
-                reader.readAsText(file);
-            };
-            fileInput.click();
-        });
-    }
-    
-    // --- Stack Creator Functions (adapted from CLL.html) ---
-    
-    function stackCreator_load() {
-        try { return JSON.parse(localStorage.getItem(CREATOR_KEY)) || []; } catch(e) { return []; }
-    }
-    function stackCreator_save(arr) {
-        localStorage.setItem(CREATOR_KEY, JSON.stringify(arr));
-        stackCreator_render();
-    }
-    function stackCreator_inferName(url) {
-        try {
-            const u = new URL(url);
-            return u.hostname.replace(/^www\./,'');
-        } catch(e) { return url; }
-    }
+    // --- Stack Creator Logic ---
+    function stackCreator_load() { try { return JSON.parse(localStorage.getItem(CREATOR_KEY)) || []; } catch(e) { return []; } }
+    function stackCreator_save(arr) { localStorage.setItem(CREATOR_KEY, JSON.stringify(arr)); stackCreator_render(); }
+    function stackCreator_inferName(url) { try { const u = new URL(url); return u.hostname.replace(/^www\./,''); } catch(e) { return url; } }
     function stackCreator_parseInput(text) {
-        text = (text||'').trim();
-        if(!text) return null;
+        text = (text||'').trim(); if(!text) return null;
         const parts = text.split(/\s*-\s*/);
-        if(parts.length === 1){
-            const maybeUrl = parts[0];
-            const url = maybeUrl.match(/^https?:\/\//i) ? maybeUrl : 'https://' + maybeUrl;
-            return {name: stackCreator_inferName(url), href: url};
-        } else {
-            const name = parts.slice(0, -1).join(' - ') || parts[0];
-            let href = parts[parts.length-1];
-            href = href.match(/^https?:\/\//i) ? href : 'https://' + href;
-            return {name: name.trim() || stackCreator_inferName(href), href: href.trim()};
-        }
+        if(parts.length === 1){ const maybeUrl = parts[0]; const url = maybeUrl.match(/^https?:\/\//i) ? maybeUrl : 'https://' + maybeUrl; return {name: stackCreator_inferName(url), href: url}; } 
+        else { const name = parts.slice(0, -1).join(' - ') || parts[0]; let href = parts[parts.length-1]; href = href.match(/^https?:\/\//i) ? href : 'https://' + href; return {name: name.trim() || stackCreator_inferName(href), href: href.trim()}; }
     }
-    function stackCreator_addFromInput(str) {
-        const entry = stackCreator_parseInput(str);
-        if(!entry) return;
-        const arr = stackCreator_load();
-        arr.push(entry);
-        stackCreator_save(arr);
-    }
-    function stackCreator_removeIndex(i) {
-        const arr = stackCreator_load();
-        arr.splice(i,1);
-        stackCreator_save(arr);
-    }
-    function stackCreator_moveUp(i) {
-        if(i<=0) return;
-        const arr = stackCreator_load();
-        const a = arr.splice(i,1)[0];
-        arr.splice(i-1,0,a);
-        stackCreator_save(arr);
-    }
-    function stackCreator_moveDown(i) {
-        const arr = stackCreator_load();
-        if(i>=arr.length-1) return;
-        const a = arr.splice(i,1)[0];
-        arr.splice(i+1,0,a);
-        stackCreator_save(arr);
-    }
+    function stackCreator_addFromInput(str) { const entry = stackCreator_parseInput(str); if(!entry) return; const arr = stackCreator_load(); arr.push(entry); stackCreator_save(arr); }
+    function stackCreator_removeIndex(i) { const arr = stackCreator_load(); arr.splice(i,1); stackCreator_save(arr); }
+    function stackCreator_moveUp(i) { if(i<=0) return; const arr = stackCreator_load(); const a = arr.splice(i,1)[0]; arr.splice(i-1,0,a); stackCreator_save(arr); }
+    function stackCreator_moveDown(i) { const arr = stackCreator_load(); if(i>=arr.length-1) return; const a = arr.splice(i,1)[0]; arr.splice(i+1,0,a); stackCreator_save(arr); }
     function stackCreator_render() {
-        const listEl = $('stackCreatorList');
-        if (!listEl) return; 
-        
-        const arr = stackCreator_load();
-        listEl.innerHTML = '';
+        const listEl = $('stackCreatorList'); if (!listEl) return; 
+        const arr = stackCreator_load(); listEl.innerHTML = '';
         arr.forEach((it, idx) => {
             const li = document.createElement('li');
-            const left = document.createElement('div');
-            left.style.minWidth = '0';
-            left.innerHTML = `<div class="creator-anchor" title="${escapeAttr(it.name)}">${escapeHtml(it.name)}</div> <div class="creator-meta" title="${escapeAttr(it.href)}">${escapeHtml(it.href)}</div>`;
-            li.appendChild(left);
-            
-            const actions = document.createElement('div');
-            actions.className = 'creator-actions';
-            actions.style.display = 'flex';
-            actions.style.gap = '6px';
-            actions.style.flexShrink = '0';
-            const up = document.createElement('button'); up.textContent = '↑'; up.onclick = () => stackCreator_moveUp(idx);
-            const down = document.createElement('button'); down.textContent = '↓'; down.onclick = () => stackCreator_moveDown(idx);
-            const del = document.createElement('button'); del.textContent = '✕'; del.className = 'creator-delete'; del.onclick = () => stackCreator_removeIndex(idx);
-            actions.appendChild(up); actions.appendChild(down); actions.appendChild(del);
-            li.appendChild(actions);
+            li.innerHTML = `<div style="min-width:0"><div class="creator-anchor" title="${escapeAttr(it.name)}">${escapeHtml(it.name)}</div> <div class="creator-meta" title="${escapeAttr(it.href)}">${escapeHtml(it.href)}</div></div><div class="creator-actions" style="display:flex;gap:6px;flex-shrink:0"><button onclick="stackCreator_moveUp(${idx})">↑</button><button onclick="stackCreator_moveDown(${idx})">↓</button><button class="creator-delete" onclick="stackCreator_removeIndex(${idx})">✕</button></div>`;
+            // Note: Inline onclicks used here for brevity within dynamic HTML generation, relying on global scope exposure or re-binding. 
+            // Better practice: bind events. For simplicity in single file, we'll bind via delegation or expose functions globally.
+            // Exposing globally for inline handlers:
+            window.stackCreator_moveUp = stackCreator_moveUp; window.stackCreator_moveDown = stackCreator_moveDown; window.stackCreator_removeIndex = stackCreator_removeIndex;
             listEl.appendChild(li);
         });
-        if(arr.length===0){
-            listEl.innerHTML = '<li class="creator-meta" style="background:transparent;">No links yet. Paste a link and press Enter.</li>';
-        }
+        if(arr.length===0) listEl.innerHTML = '<li class="creator-meta" style="background:transparent;">No links yet. Paste a link and press Enter.</li>';
     }
     function stackCreator_handleExport() {
         const arr = stackCreator_load();
-        const html = ['<!doctype html>','<html>','  <head>','    <meta charset="utf-8" />','    <title>Cloudstax-Links</title>','  </head>','  <body>']
-          .concat(arr.map(it => `    <a href="${escapeAttr(it.href)}">${escapeHtml(it.name)}</a>`))
-          .concat(['  </body>','</html>']).join('\n');
-        const blob = new Blob([html], {type:'text/html'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = 'Cloudstax-Links.html';
-        document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        const html = ['<!doctype html>','<html>','  <head>','    <meta charset="utf-8" />','    <title>Cloudstax-Links</title>','  </head>','  <body>'].concat(arr.map(it => `    <a href="${escapeAttr(it.href)}">${escapeHtml(it.name)}</a>`)).concat(['  </body>','</html>']).join('\n');
+        const blob = new Blob([html], {type:'text/html'}); const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = 'Cloudstax-Links.html'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
     }
     function stackCreator_handleClear() {
-        if (stackCreator_load().length === 0) {
-            showNotification("List is already empty.");
-            return;
-        }
-
-        const modalBody = $('modalBody');
-        const modalFooter = $('modalFooter');
-        
-        const oldBody = modalBody.innerHTML;
-        const oldFooter = modalFooter.innerHTML;
-
-        modalBody.innerHTML = `
-            <p class="text-lg text-gray-100">Are you sure?</p>
-            <p class="text-sm text-gray-300 mt-2">This will permanently delete all ${stackCreator_load().length} links from the creator list. This cannot be undone.</p>
-        `;
-        
-        modalFooter.innerHTML = `
-            <button id="confirmClear" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-md text-sm font-medium transition">Yes, Clear List</button>
-            <button id="cancelClear" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button>
-        `;
-
-        $('confirmClear').onclick = () => {
-            localStorage.removeItem(CREATOR_KEY);
-            showNotification("Creator list cleared.");
-            
-            modalBody.innerHTML = oldBody;
-            modalFooter.innerHTML = oldFooter;
-            
-            stackCreator_bindListeners();
-            stackCreator_render(); 
-        };
-
-        $('cancelClear').onclick = () => {
-            modalBody.innerHTML = oldBody;
-            modalFooter.innerHTML = oldFooter;
-            
-            stackCreator_bindListeners();
-        };
+        if (stackCreator_load().length === 0) { showNotification("List is already empty."); return; }
+        // Simple confirmation
+        if(confirm("Delete all links from creator list?")) { localStorage.removeItem(CREATOR_KEY); showNotification("Cleared."); stackCreator_render(); }
     }
-    function stackCreator_handlePaste(e) {
-        const text = (e.clipboardData || window.clipboardData).getData('text');
-        if(text && /\r|\n/.test(text)){
-            e.preventDefault();
-            const lines = text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-            lines.forEach(l => stackCreator_addFromInput(l));
-            e.target.value = '';
-        }
-    }
-    function stackCreator_handleKeydown(e) {
-        if(e.key === 'Enter'){
-            e.preventDefault();
-            const input = e.target;
-            const v = input.value.trim();
-            if(!v) return;
-            stackCreator_addFromInput(v);
-            input.value = '';
-        }
-    }
-    
-    /**
-     * Shows the "Create Stack Preset" modal.
-     */
     function handleShowStackCreator() {
-        const body = `
-            <p class="text-sm text-gray-300 mb-2">Add links to create a shareable HTML preset file.</p>
-            <p class="text-xs text-gray-400 mb-3">You can paste <code>https://site.com</code> or <code>Name - https://site.com</code>. Paste multiple lines at once to bulk-add.</p>
-            
-            <div class="flex gap-2">
-                <input id="stackCreatorInput" type="text" placeholder="Paste URL or 'Name - https://example.com' and press Enter">
-            </div>
-            
-            <ul id="stackCreatorList"></ul>
-        `;
-        const footer = `
-            <button id="creatorExport" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">Export HTML</button>
-            <button id="creatorClear" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-md text-sm font-medium transition">Clear List</button>
-            <button id="creatorClose" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Close</button>
-        `;
-        
+        const body = `<p class="text-sm text-gray-300 mb-2">Add links to create a shareable HTML preset file.</p><p class="text-xs text-gray-400 mb-3">You can paste <code>https://site.com</code> or <code>Name - https://site.com</code>.</p><div class="flex gap-2"><input id="stackCreatorInput" type="text" placeholder="Paste URL and press Enter"></div><ul id="stackCreatorList"></ul>`;
+        const footer = `<button id="creatorExport" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">Export HTML</button><button id="creatorClear" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-md text-sm font-medium transition">Clear List</button><button id="creatorClose" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Close</button>`;
         showModal("Create Stack Preset", body, footer);
-        
         stackCreator_render();
-        stackCreator_bindListeners();
+        $('stackCreatorInput').onkeydown = e => { if(e.key==='Enter'){ e.preventDefault(); const v=e.target.value.trim(); if(v) { stackCreator_addFromInput(v); e.target.value=''; } } };
+        $('creatorExport').onclick = stackCreator_handleExport; $('creatorClear').onclick = stackCreator_handleClear; $('creatorClose').onclick = hideModal;
     }
-    
-    /**
-     * Helper function to bind listeners for the Stack Creator modal
-     */
-    function stackCreator_bindListeners() {
-        const input = $('stackCreatorInput');
-        if (input) { 
-            input.addEventListener('keydown', stackCreator_handleKeydown);
-            input.addEventListener('paste', stackCreator_handlePaste);
-        }
-        const exportBtn = $('creatorExport');
-        if (exportBtn) exportBtn.addEventListener('click', stackCreator_handleExport);
-        
-        const clearBtn = $('creatorClear');
-        if (clearBtn) clearBtn.addEventListener('click', stackCreator_handleClear);
-        
-        const closeBtn = $('creatorClose');
-        if (closeBtn) closeBtn.addEventListener('click', hideModal);
-    }
-    
-    /**
-     * Shows the main settings modal.
-     */
-    function handleShowSettings() {
-        // --- Stack Icon Section Builder ---
-        const allStacks = [...new Set(allBookmarks.map(b => b.stack || "General"))].sort();
-        const iconOptions = STACK_ICON_LIST.map(icon => 
-            `<option value="${icon}">${icon || 'None'}</option>`
-        ).join('');
-        
-        let stackIconHtml = '<div id="stackIconList" class="space-y-2">';
-        if (allStacks.length > 0) {
-            stackIconHtml += allStacks.map(stack => {
-                const currentIcon = stackIcons.get(stack) || '';
-                return `
-                <div class="stack-icon-item">
-                    <label for="icon-select-${sanitize(stack)}">${sanitize(stack)}</label>
-                    <select id="icon-select-${sanitize(stack)}"
-                           data-stack-name="${sanitize(stack)}"
-                           class="stack-icon-select">
-                        ${iconOptions.replace(`value="${currentIcon}"`, `value="${currentIcon}" selected`)}
-                    </select>
-                </div>
-            `}).join('');
-        } else {
-            stackIconHtml += '<p class="text-sm text-gray-400">No stacks created yet.</p>';
-        }
-        stackIconHtml += '</div>';
-        
-        const chevron = `<svg class="settings-chevron w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>`;
-        
-        // --- NEW: Appearance Section ---
-        const appearanceHtml = `
-            <div class="settings-section">
-                <button class="settings-section-title" data-target="content-appearance">
-                    <span>Appearance</span>
-                    ${chevron}
-                </button>
-                <div id="content-appearance" class="settings-section-content hidden">
-                    <p class="settings-section-desc">
-                        Change the look and feel of the app.
-                    </p>
-                    <label class="flex items-center">
-                        <input id="modalCompactView" type="checkbox" class="form-checkbox" ${isCompactView ? 'checked' : ''}>
-                        <span class="ml-2 text-sm text-gray-300">Enable Compact View</span>
-                    </label>
-                </div>
-            </div>
-        `;
-        
-        const linkBehaviorHtml = `
-            <div class="settings-section">
-                <button class="settings-section-title" data-target="content-link-behavior">
-                    <span>Link Behavior</span>
-                    ${chevron}
-                </button>
-                <div id="content-link-behavior" class="settings-section-content hidden">
-                    <p class="settings-section-desc">
-                        Override individual link settings to force all links to open in a specific way.
-                    </p>
-                    <div class="space-y-2" id="linkBehaviorOptions">
-                        <label class="flex items-center">
-                            <input type="radio" name="link-behavior" value="default" class="form-radio" ${globalOpenMode === 'default' ? 'checked' : ''}>
-                            <span class="ml-2 text-sm text-gray-300">Default (Use individual link settings)</span>
-                        </label>
-                        <label class="flex items-center">
-                            <input type="radio" name="link-behavior" value="force-external" class="form-radio" ${globalOpenMode === 'force-external' ? 'checked' : ''}>
-                            <span class="ml-2 text-sm text-gray-300">Force All External (In default browser)</span>
-                        </label>
-                        <label class="flex items-center">
-                            <input type="radio" name="link-behavior" value="force-internal" class="form-radio" ${globalOpenMode === 'force-internal' ? 'checked' : ''}>
-                            <span class="ml-2 text-sm text-gray-300">Force All Internal (In new tab)</span>
-                        </label>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        const dataManagementHtml = `
-            <div class="settings-section">
-                <button class="settings-section-title" data-target="content-data-mgmt">
-                    <span>Data Management</span>
-                    ${chevron}
-                </button>
-                <div id="content-data-mgmt" class="settings-section-content hidden">
-                    <p class="settings-section-desc">
-                        Save or restore a backup of all your bookmarks from a JSON file.
-                    </p>
-                    <div class="flex gap-3">
-                        <button id="modalImportJson" class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2 justify-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-input"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M2 15h10"/><path d="m5 12-3 3 3 3"/></svg>
-                            Import from JSON
-                        </button>
-                        <button id="modalExportData" class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2 justify-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-output"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M22 15h-10"/><path d="m19 12-3 3 3 3"/></svg>
-                            Export to JSON
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        const body = `
-            ${appearanceHtml}
-            ${linkBehaviorHtml} 
-        
-            <div class="settings-section">
-                <button class="settings-section-title" data-target="content-app-tools">
-                    <span>App Tools</span>
-                    ${chevron}
-                </button>
-                <div id="content-app-tools" class="settings-section-content hidden">
-                    <p class="settings-section-desc">Install the default set of Cloudstax tools.</p>
-                    <button id="modalInstallTools" class="w-full text-left px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-package"><path d="M16.5 9.4 7.5 4.6"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
-                        Install Cloudstax Tools
-                    </button>
-                </div>
-            </div>
-            
-            <div class="settings-section">
-                <button class="settings-section-title" data-target="content-stack-icons">
-                    <span>Stack Customization</span>
-                    ${chevron}
-                </button>
-                <div id="content-stack-icons" class="settings-section-content hidden">
-                    <p class="settings-section-desc">
-                        Assign a simple icon or emoji to your stacks for easier identification.
-                    </p>
-                    ${stackIconHtml}
-                    <button id="modalSaveIcons" class="mt-3 w-full text-left px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition flex items-center gap-2 justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-save"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13H7v8"/><polyline points="7 3 7 8H15"/></svg>
-                        Save Icons
-                    </button>
-                </div>
-            </div>
-            
-            <div class="settings-section">
-                <button class="settings-section-title" data-target="content-stack-sharing">
-                    <span>Stack Sharing</span>
-                    ${chevron}
-                </button>
-                <div id="content-stack-sharing" class="settings-section-content hidden">
-                    <p class="settings-section-desc">
-                        Create your own shareable stack file, or import one from a friend.
-                    </p>
-                    <div class="flex gap-3">
-                        <button id="modalImportStack" class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2 justify-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-input"><path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M2 15h10"/><path d="m5 12-3 3 3 3"/></svg>
-                            Import Stack (HTML)
-                        </button>
-                        <button id="modalCreateStack" class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2 justify-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus-square"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
-                            Create Stack (HTML)
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
-            ${dataManagementHtml}
-            
-            <div class="settings-section">
-                <button class="settings-section-title" data-target="content-diagnostics">
-                    <span>Diagnostics</span>
-                    ${chevron}
-                </button>
-                <div id="content-diagnostics" class="settings-section-content hidden">
-                    <button id="modalViewLog" class="w-full text-left px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm font-medium transition flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bug"><path d="M8 2a3 3 0 0 0-3 3v1H4a2 2 0 0 0-2 2v2a3 3 0 0 0 3 3h1v1a3 3 0 0 0 3 3h4a3 3 0 0 0 3-3v-1h1a3 3 0 0 0 3-3V8a2 2 0 0 0-2-2h-1V5a3 3 0 0 0-3-3H8Zm6 12v-2"/><path d="M8 14v-2"/><path d="M8 10h8"/><path d="M16 6H8"/><path d="m12 18 2-3h-4l2 3"/></svg>
-                        View Error Log
-                    </button>
-                </div>
-            </div>
-        `;
-        const footer = `
-            <button id="closeSettings" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Close</button>
-        `;
-        
-        showModal("Settings", body, footer);
-    }
-    
-    /**
-     * Shows the error log modal.
-     */
-    function handleViewLog() {
-        let logHtml = '<div id="logContainer">';
-        
-        if (errorLog.length === 0) {
-            logHtml += '<p class="text-sm text-gray-400">No errors recorded. Good job!</p>';
-        } else {
-            // Show most recent errors first
-            logHtml += [...errorLog].reverse().map(err => `
-                <div class="log-entry">
-                    <div><span class="log-time">[${sanitize(err.time)}]</span> <span class="log-context">${sanitize(err.context)}</span></div>
-                    <span class="log-message">${sanitize(err.message)}</span>
-                    ${err.stack ? `<pre class="text-xs text-gray-500 mt-1" style="white-space: pre-wrap; word-break: break-all;">${sanitize(err.stack)}</pre>` : ''}
-                </div>
-            `).join('');
-        }
-        logHtml += '</div>';
-        
-        const footer = `
-            <button id="modalClearLog" class="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-md text-sm font-medium transition">Clear Log</button>
-            <button id="modalCloseLog" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Close</button>
-        `;
-        
-        showModal("Error Log", logHtml, footer);
-        
-        // Add listeners for these specific buttons
-        $('modalClearLog').addEventListener('click', () => {
-            errorLog = []; // Clear the log
-            elements.errorCountBadge.textContent = '0';
-            elements.errorCountBadge.classList.add('hidden');
+    function handleImportStackPreset() {
+        const body = `<p class="text-sm text-gray-300 mb-2">Please enter a name for this new stack.</p><input id="importStackName" class="w-full text-sm bg-gray-900 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="New Stack Name">`;
+        const footer = `<button id="cancelImport" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md text-sm font-medium transition">Cancel</button><button id="nextImport" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition">Next</button>`;
+        showModal("Import Stack Preset", body, footer); $('importStackName').focus();
+        $('cancelImport').onclick = hideModal;
+        $('nextImport').onclick = () => {
+            const name = $('importStackName').value.trim(); if(!name) return showNotification("Name required.", true);
             hideModal();
-            showNotification("Error log cleared.");
-        });
-        $('modalCloseLog').addEventListener('click', hideModal);
+            const input = document.createElement('input'); input.type='file'; input.accept='.html';
+            input.onchange = e => {
+                const reader = new FileReader();
+                reader.onload = async ev => {
+                    const bookmarks = parseLinksFromHtml(ev.target.result, name.charAt(0).toUpperCase()+name.slice(1));
+                    if(bookmarks.length>0) { await batchImportToDB(bookmarks); showNotification(`Imported ${bookmarks.length} links.`); await loadAllBookmarks(); }
+                    else showNotification("No links found.", true);
+                };
+                reader.readAsText(e.target.files[0]);
+            };
+            input.click();
+        };
     }
     
-    /**
-     * Handles all *button clicks* inside the modal for event delegation.
-     * @param {Event} e - The click event.
-     */
-    function handleModalClicks(e) {
-        const target = e.target;
-        
-        // Accordion Toggle
-        const accordionToggle = target.closest('.settings-section-title');
-        if (accordionToggle) {
-            const targetId = accordionToggle.dataset.target;
-            const targetContent = $(targetId);
-            const chevron = accordionToggle.querySelector('.settings-chevron');
-            if (targetContent) {
-                targetContent.classList.toggle('hidden');
-                chevron.classList.toggle('rotated');
-            }
-            return;
-        }
-
-        // Button Clicks
-        const button = target.closest('button');
-        if (!button) return;
-
-        switch(button.id) {
-            case 'closeSettings':
-                hideModal();
-                break;
-            case 'modalInstallTools':
-                hideModal();
-                handleInstallTools();
-                break;
-            case 'modalImportStack':
-                hideModal();
-                handleImportStackPreset();
-                break;
-            case 'modalCreateStack':
-                hideModal();
-                handleShowStackCreator();
-                break;
-            case 'modalImportJson':
-                hideModal();
-                handleImportJson();
-                break;
-            case 'modalViewLog':
-                hideModal();
-                handleViewLog();
-                break;
-            case 'modalExportData':
-                exportBookmarks();
-                break;
-            case 'modalSaveIcons':
-                const newIconMap = new Map();
-                document.querySelectorAll('.stack-icon-select').forEach(select => {
-                    const stackName = select.dataset.stackName;
-                    const icon = select.value;
-                    if (stackName) { 
-                        newIconMap.set(stackName, icon);
-                    }
-                });
-                saveStackIcons(newIconMap);
-                showNotification("Stack icons saved!");
-                refreshUI();
-                break;
-        }
-    }
-
-    /**
-     * --- NEW FUNCTION ---
-     * Handles *change events* (radios, checkboxes) inside the modal.
-     * @param {Event} e - The change event.
-     */
-    function handleModalChanges(e) {
-        const target = e.target;
-
-        // Link Behavior Radio Buttons
-        if (target.name === 'link-behavior') {
-            saveOpenMode(target.value);
-        }
-        
-        // Compact View Checkbox
-        if (target.id === 'modalCompactView') {
-            saveCompactView(target.checked);
-        }
-    }
-
-
     // --- Initialization ---
-
     async function initialize() {
       try {
-        // 1. Initialize the 3D Logos
         initThreeJSAnimation();
-          
-        // 2. Initialize the local database
         await initDB();
-        
-        // 3. Load recent launches
         recentLaunches = JSON.parse(localStorage.getItem('cloudstax_recent')) || [];
-        
-        // 4. Load stack icons
         loadStackIcons();
-        
-        // 5. Load global open mode
         loadOpenMode();
-        
-        // 6. --- NEW: Load compact view setting ---
         loadCompactView();
-        
-        // 7. --- NEW: Set initial link mode icon ---
         updateLinkModeBtnIcon();
+        await loadAllBookmarks();
         
-        // 8. Load all bookmarks from the DB
-        await loadAllBookmarks(); // This now calls refreshUI()
- 
-      } catch (error) {
-        logError(error, "initialize");
-        elements.loadingIndicator.textContent = "Error: Application failed to initialize. Check log.";
-        return;
-      }
+        // Initial Tab State
+        setAddMode('link');
+      } catch (error) { logError(error, "initialize"); }
 
-      // 9. Add DOM Event Listeners
+      // Event Listeners
       elements.addBtn.addEventListener('click', addBookmark);
       elements.urlIn.addEventListener('keydown', e => e.key === 'Enter' && addBookmark());
       elements.nameIn.addEventListener('keydown', e => e.key === 'Enter' && addBookmark());
       elements.stackIn.addEventListener('keydown', e => e.key === 'Enter' && addBookmark());
-      
-      // Debounced search input
-      elements.searchIn.addEventListener('input', debounce(() => { 
-        currentPage = 1; 
-        renderBookmarks(); 
-      }, 250));
-      
-      elements.stackFilter.addEventListener('change', () => { 
-        currentPage = 1;
-        if (isReorderMode) {
-            handleReorderToggle(); 
-        } else {
-            renderBookmarks();
-        }
+      elements.codeIn.addEventListener('keydown', e => {
+          if (e.key === 'Enter' && e.ctrlKey) addBookmark(); // Ctrl+Enter to submit code
       });
       
+      elements.searchIn.addEventListener('input', debounce(() => { currentPage = 1; renderBookmarks(); }, 250));
+      elements.stackFilter.addEventListener('change', () => { currentPage = 1; isReorderMode ? handleReorderToggle() : renderBookmarks(); });
       elements.launchSelectedBtn.addEventListener('click', launchSelected);
-      elements.quickGrabBtn.addEventListener('click', handleQuickGrabModal); 
       elements.settingsBtn.addEventListener('click', handleShowSettings);
       elements.reorderBtn.addEventListener('click', handleReorderToggle); 
-      // --- NEW: Link mode toggle button listener ---
       elements.linkModeBtn.addEventListener('click', toggleLinkMode);
-      
-      // Standby listeners
       elements.standbyBtn.addEventListener('click', () => toggleStandbyMode(true));
       elements.openAppBtn.addEventListener('click', () => toggleStandbyMode(false));
+      elements.quickGrabBtn.addEventListener('click', handleQuickGrabModal);
       
-      // Modal event delegation
-      elements.modalBody.addEventListener('click', handleModalClicks); // For buttons
-      elements.modalBody.addEventListener('change', handleModalChanges); // For radios/checkboxes
-      elements.modalFooter.addEventListener('click', handleModalClicks); // For buttons
+      // Tabs
+      elements.modeLinkBtn.addEventListener('click', () => setAddMode('link'));
+      elements.modeCodeBtn.addEventListener('click', () => setAddMode('code'));
+
+      // Modal delegation
+      elements.modalBody.addEventListener('click', handleModalClicks); 
+      elements.modalBody.addEventListener('change', handleModalChanges);
+      elements.modalFooter.addEventListener('click', handleModalClicks);
     }
     
-    // --- Global Error Handlers ---
-    window.onerror = function(message, source, lineno, colno, error) {
-      logError(error || { message: message }, `Global Uncaught\nSource: ${source} @ ${lineno}:${colno}`);
-      return true; 
-    };
+    // Settings Modal Logic (Simplified for brevity)
+    function handleShowSettings() {
+        const body = `
+        <div class="space-y-4">
+            <h3 class="font-bold border-b border-gray-700 pb-2">Appearance</h3>
+            <label class="flex items-center"><input id="modalCompactView" type="checkbox" class="form-checkbox" ${isCompactView?'checked':''}><span class="ml-2 text-sm text-gray-300">Compact View</span></label>
+            
+            <h3 class="font-bold border-b border-gray-700 pb-2 pt-2">Data</h3>
+            <div class="flex gap-2">
+                <button id="modalImportJson" class="flex-1 bg-gray-700 hover:bg-gray-600 p-2 rounded text-sm">Import JSON</button>
+                <button id="modalExportData" class="flex-1 bg-gray-700 hover:bg-gray-600 p-2 rounded text-sm">Export JSON</button>
+            </div>
+            
+             <h3 class="font-bold border-b border-gray-700 pb-2 pt-2">Stack Tools</h3>
+            <div class="flex gap-2">
+                <button id="modalCreateStack" class="flex-1 bg-gray-700 hover:bg-gray-600 p-2 rounded text-sm">Create Stack Preset</button>
+                <button id="modalImportStack" class="flex-1 bg-gray-700 hover:bg-gray-600 p-2 rounded text-sm">Import Stack Preset</button>
+            </div>
+            <button id="modalInstallTools" class="w-full bg-gray-700 hover:bg-gray-600 p-2 rounded text-sm mt-2 text-left">Install Default Tools</button>
 
-    window.onunhandledrejection = function(event) {
-      logError(event.reason || { message: 'Unhandled promise rejection' }, 'Global Unhandled Rejection');
-    };
+            <h3 class="font-bold border-b border-gray-700 pb-2 pt-2">Diagnostics</h3>
+            <button id="modalViewLog" class="w-full bg-gray-700 hover:bg-gray-600 p-2 rounded text-sm text-left">View Error Log</button>
+        </div>`;
+        showModal("Settings", body, `<button id="closeSettings" class="bg-gray-600 px-4 py-2 rounded text-sm">Close</button>`);
+    }
+    function handleModalClicks(e) {
+        if(e.target.id === 'closeSettings') hideModal();
+        if(e.target.id === 'modalExportData') exportBookmarks();
+        if(e.target.id === 'modalImportJson') { hideModal(); handleImportJson(); }
+        if(e.target.id === 'modalCreateStack') { hideModal(); handleShowStackCreator(); }
+        if(e.target.id === 'modalImportStack') { hideModal(); handleImportStackPreset(); }
+        if(e.target.id === 'modalInstallTools') { hideModal(); handleInstallTools(); }
+        if(e.target.id === 'modalViewLog') {
+             hideModal(); 
+             showModal("Error Log", `<div class="max-h-60 overflow-auto bg-gray-900 p-2 font-mono text-xs text-red-400">${errorLog.map(e=>`<div>${e.time}: ${e.message}</div>`).join('') || 'No errors.'}</div>`, `<button id="clearLog" class="bg-red-600 px-3 py-1 rounded text-xs mr-2">Clear</button><button id="closeLog" class="bg-gray-600 px-3 py-1 rounded text-xs">Close</button>`);
+             $('clearLog').onclick = () => { errorLog=[]; elements.errorCountBadge.classList.add('hidden'); hideModal(); };
+             $('closeLog').onclick = hideModal;
+        }
+    }
+    function handleModalChanges(e) {
+        if(e.target.id === 'modalCompactView') saveCompactView(e.target.checked);
+    }
 
     document.addEventListener('DOMContentLoaded', initialize);
-
   </script>
 </body>
 </html>
