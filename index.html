@@ -3,892 +3,315 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cloudstax - Quick Access</title>
-  <!-- Load Tailwind CSS -->
+  <title>Cloudstax - Code Manager</title>
+  <!-- Dependencies -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Load Three.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <!-- Load Inter font -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display.swap" rel="stylesheet">
   <style>
     body { font-family: 'Inter', sans-serif; overflow: hidden; }
-    
-    /* Custom Scrollbar */
+    /* UI Utils */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
-    ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
     ::-webkit-scrollbar-track { background: #111827; }
-
-    /* Form Elements */
-    .form-checkbox, .form-radio {
-      appearance: none; background-color: #374151; border: 1px solid #4b5563;
-      display: inline-block; vertical-align: middle; user-select: none; flex-shrink: 0;
-    }
-    .form-checkbox { height: 1.15rem; width: 1.15rem; border-radius: 0.25rem; }
-    .form-radio { height: 1.15rem; width: 1.15rem; border-radius: 100%; }
-    .form-checkbox:checked, .form-radio:checked {
-      background-color: #3b82f6; border-color: #3b82f6; background-size: 100% 100%; background-position: center; background-repeat: no-repeat;
-    }
-    .form-checkbox:checked { background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 0 1 0 1.414l-5 5a1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L6.5 9.086l4.293-4.293a1 1 0 0 1 1.414 0z'/%3e%3c/svg%3e"); }
-    .form-radio:checked { background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3ccircle cx='8' cy='8' r='3'/%3e%3c/svg%3e"); }
-    .form-checkbox:focus, .form-radio:focus { outline: none; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5); }
-
-    /* UI Classes */
+    .glass { background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(75, 85, 99, 0.4); }
+    .form-checkbox { appearance: none; background: #374151; border: 1px solid #4b5563; display: inline-block; vertical-align: middle; height: 1.1rem; width: 1.1rem; border-radius: 0.25rem; flex-shrink: 0; }
+    .form-checkbox:checked { background-color: #3b82f6; border-color: #3b82f6; background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 0 1 0 1.414l-5 5a1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L6.5 9.086l4.293-4.293a1 1 0 0 1 1.414 0z'/%3e%3c/svg%3e"); background-size: 100% 100%; background-position: center; background-repeat: no-repeat; }
+    .active-tab { color: #60a5fa; border-bottom: 2px solid #60a5fa; background: rgba(59, 130, 246, 0.1); }
+    .dragging { opacity: 0.5; background: #374151 !important; border: 1px dashed #60a5fa !important; }
+    .drag-over { border-top: 2px solid #3b82f6 !important; }
     #logo-canvas { display: block; }
-    .mode-tab-active { color: #60a5fa; border-bottom: 2px solid #60a5fa; }
-    .mode-tab-inactive { color: #9ca3af; border-bottom: 2px solid transparent; }
-    .mode-tab-inactive:hover { color: #e5e7eb; }
-    
-    /* Compact View */
-    #bookmarksView.compact-mode .bookmark-item { padding: 0.4rem 0.75rem; gap: 0.5rem; }
-    #bookmarksView.compact-mode .bookmark-item img { width: 1.5rem; height: 1.5rem; }
-    #bookmarksView.compact-mode .drag-handle { margin-top: 0; }
-    
-    /* Ticker Animation */
-    @keyframes ticker {
-        0% { transform: translateX(100%); }
-        100% { transform: translateX(-100%); }
-    }
-    .ticker-content {
-        display: inline-block;
-        white-space: nowrap;
-        animation: ticker 30s linear infinite;
-    }
-    .ticker-wrap:hover .ticker-content { animation-play-state: paused; }
-
-    /* Glass Effect for Dashboard */
-    .glass-panel {
-        background: rgba(17, 24, 39, 0.7);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        border: 1px solid rgba(75, 85, 99, 0.4);
-    }
-    
     /* Standby Overlay */
-    #standbyOverlay {
-        background: radial-gradient(circle at center, #1f2937 0%, #030712 100%);
-    }
-</style>
+    #standbyOverlay { background: radial-gradient(circle at center, #1f2937 0%, #030712 100%); }
+    /* Stack Creator */
+    #stackCreatorList li { display: flex; justify-content: space-between; padding: 6px; border-bottom: 1px solid #374151; font-size: 0.8rem; color: #d1d5db; }
+    #stackCreatorList li:last-child { border-bottom: none; }
+    .creator-actions button { margin-left: 4px; padding: 2px 6px; background: #4b5563; border-radius: 4px; font-size: 0.7rem; }
+  </style>
 </head>
 <body class="h-full bg-gray-950 text-gray-100 flex overflow-hidden">
 
-  <!-- Main App Layout (Split Screen) -->
-  <div id="appLayout" class="flex w-full h-full relative z-10 transition-all duration-500">
+  <!-- LAYOUT -->
+  <div id="appLayout" class="flex w-full h-full relative z-10">
     
-    <!-- LEFT PANEL: Stack Manager (Fixed Width on Desktop) -->
-    <div id="leftPanel" class="w-full lg:w-[500px] xl:w-[550px] flex flex-col h-full border-r border-gray-800 bg-gray-900 z-20 shadow-2xl">
-      
-      <!-- App Header -->
-      <header class="flex items-center gap-3 p-4 border-b border-gray-800 select-none flex-shrink-0 bg-gray-900">
+    <!-- LEFT PANEL: Code Manager -->
+    <div id="leftPanel" class="w-full lg:w-[500px] xl:w-[550px] flex flex-col h-full border-r border-gray-800 bg-gray-900 z-20 shadow-2xl relative">
+      <!-- Header -->
+      <header class="flex items-center gap-3 p-4 border-b border-gray-800 select-none bg-gray-900">
         <canvas id="logo-canvas" class="w-10 h-10 rounded-lg"></canvas>
-        <div class="flex-1">
-          <h1 class="text-base font-bold tracking-tight text-white">Cloudstax</h1>
-          <p class="text-xs text-gray-400">Stack Manager</p>
-        </div>
-        <button id="linkModeBtn" class="p-2 text-gray-400 hover:text-blue-400 transition hover-trigger" data-desc="Toggle how links open (New Tab, External Browser, or Default)" title="Set Link Behavior"></button>
-        <button id="standbyBtn" class="p-2 text-gray-400 hover:text-blue-400 transition hover-trigger" data-desc="Enter Standby Mode (Low resource usage screen)" title="Enter Standby">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-minimize-2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" x2="21" y1="10" y2="3"/><line x1="3" x2="10" y1="21" y2="14"/></svg>
+        <div class="flex-1"><h1 class="text-base font-bold text-white">Cloudstax</h1><p class="text-xs text-gray-400">Code Manager</p></div>
+        <button id="standbyBtn" class="p-2 text-gray-400 hover:text-blue-400 transition" title="Standby Mode">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
         </button>
       </header>
-
-      <!-- Input Section -->
-      <div class="p-4 border-b border-gray-800 bg-gray-800/30 flex-shrink-0">
-        <div class="flex gap-4 mb-3">
-            <button id="modeLinkBtn" class="text-xs font-medium pb-1 transition mode-tab-active hover-trigger" data-desc="Switch to adding standard web links or local files.">Link / File</button>
-            <button id="modeCodeBtn" class="text-xs font-medium pb-1 transition mode-tab-inactive hover-trigger" data-desc="Switch to adding raw HTML code directly into the app.">Raw HTML Code</button>
-        </div>
-        
-        <div class="grid grid-cols-1 gap-3">
-          <div class="flex gap-2">
-              <input id="nameIn" placeholder="Name" class="w-1/3 text-sm bg-gray-900 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 border border-gray-700 hover-trigger" data-desc="Enter a display name for your stack item.">
-              <input id="urlIn" placeholder="URL (e.g. google.com)" class="w-2/3 text-sm bg-gray-900 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 border border-gray-700 hover-trigger" data-desc="Paste the website URL here.">
-          </div>
-          
-          <!-- Code Input (Hidden by default) -->
-          <div id="codeInputWrapper" class="hidden flex-col gap-2">
-             <div class="flex justify-between items-center">
-                <span class="text-xs text-gray-500">Paste HTML or Import File:</span>
-                <input type="file" id="codeFileInput" accept=".html,.htm,.txt" class="text-xs text-gray-400 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-gray-800 file:text-blue-400 hover:file:bg-gray-700 cursor-pointer hover-trigger" data-desc="Upload a .html or .txt file to auto-fill the code editor.">
-             </div>
-             <textarea id="codeIn" placeholder="<!DOCTYPE html>..." class="w-full text-sm bg-gray-900 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono h-24 resize-none border border-gray-700 hover-trigger" data-desc="Write or paste raw HTML/CSS/JS code here to run it as a local app."></textarea>
-          </div>
-
-          <div class="flex gap-2 items-center">
-              <input id="stackIn" placeholder="Stack Category" list="mainStackDatalist" class="flex-1 text-sm bg-gray-900 rounded-md px-3 py-2 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 border border-gray-700 hover-trigger" data-desc="Group this item into a specific Stack category (e.g., 'Work', 'Social').">
-              <datalist id="mainStackDatalist"></datalist>
-              <button id="addBtn" class="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-md text-sm font-medium transition text-white shadow-lg shadow-blue-900/20 hover-trigger" data-desc="Save this new item to your Cloudstax database.">
-                + Add
-              </button>
-          </div>
-          
-          <div class="flex gap-4 text-xs text-gray-400 px-1">
-             <label class="flex items-center hover-trigger" data-desc="Force this link to open in your default OS browser instead of inside the app."><input id="openExternalIn" type="checkbox" class="form-checkbox mr-2"> External</label>
-             <label class="flex items-center hover-trigger" data-desc="Mark this item as a Favorite for quick access."><input id="isFavoriteIn" type="checkbox" class="form-checkbox mr-2"> Favorite</label>
-          </div>
+      
+      <!-- App Creator Input -->
+      <div class="p-4 border-b border-gray-800 bg-gray-800/30">
+        <div class="space-y-3">
+            <div class="flex justify-between items-center text-xs text-gray-500 font-mono">
+                <span class="flex items-center gap-2">SOURCE: <input type="file" id="inFile" class="text-gray-400 file:bg-gray-800 file:text-blue-400 file:border-0 file:text-xs file:mr-2 file:cursor-pointer file:px-2 file:rounded"></span>
+                <button id="clearCode" class="text-xs text-red-400 hover:text-red-300">CLEAR</button>
+            </div>
+            
+            <textarea id="inCode" placeholder="<!-- Paste your HTML/CSS/JS App code here -->" class="w-full h-32 bg-gray-900 rounded p-3 font-mono text-xs border border-gray-700 outline-none resize-none focus:border-blue-500 text-gray-300"></textarea>
+            
+            <div class="flex gap-2">
+                <input id="inName" placeholder="App Name" class="w-1/3 text-sm bg-gray-900 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 outline-none text-white">
+                <input id="inStack" placeholder="Stack" list="dlStacks" class="flex-1 text-sm bg-gray-900 rounded px-3 py-2 border border-gray-700 outline-none text-white">
+                <datalist id="dlStacks"></datalist>
+                <button id="btnAdd" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium text-white shadow-lg shadow-blue-900/20 whitespace-nowrap">+ Create App</button>
+            </div>
+            
+            <div class="flex justify-end gap-4 text-xs text-gray-400">
+                <label class="flex items-center cursor-pointer hover:text-white"><input id="chkFav" type="checkbox" class="form-checkbox mr-2"> Add to Favorites</label>
+            </div>
         </div>
       </div>
-
-      <!-- Controls & Filter -->
+      
+      <!-- List Controls -->
       <div class="flex gap-2 p-3 bg-gray-900 border-b border-gray-800">
-        <div class="relative flex-1">
-          <input id="searchIn" placeholder="Search stacks..." class="w-full text-sm bg-gray-800 rounded-md pl-9 pr-3 py-1.5 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 border border-gray-700 hover-trigger" data-desc="Filter your bookmarks by name, URL, or stack category.">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-        </div>
-        <select id="stackFilter" class="text-sm bg-gray-800 text-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 border border-gray-700 w-32 hover-trigger" data-desc="View only items from a specific Stack category.">
-          <option value="">All Stacks</option>
-        </select>
+        <input id="inSearch" placeholder="Search apps..." class="flex-1 text-sm bg-gray-800 rounded px-3 py-1.5 border border-gray-700 outline-none focus:border-blue-500 text-white">
+        <select id="selFilter" class="text-sm bg-gray-800 text-gray-300 rounded px-2 py-1.5 border border-gray-700 outline-none w-32"><option value="">All Stacks</option></select>
       </div>
 
-      <!-- List View -->
-      <div id="bookmarksView" class="flex-1 overflow-y-auto p-2 space-y-2 bg-gray-900 custom-scrollbar">
-        <div id="bookmarksList" class="space-y-2 pb-10">
-            <!-- Items injected here -->
-            <div class="text-center text-gray-500 mt-10 text-sm">Loading Stacks...</div>
-        </div>
+      <!-- List -->
+      <div id="bookmarksView" class="flex-1 overflow-y-auto p-2 bg-gray-900 space-y-2">
+        <div id="listContainer" class="space-y-2 pb-10"></div>
       </div>
-      
+
       <!-- Pagination -->
-      <div id="paginationControls" class="hidden p-2 flex justify-center bg-gray-900 border-t border-gray-800"></div>
-
-      <!-- Footer Actions -->
-      <div id="footerButtons" class="p-3 bg-gray-900 border-t border-gray-800 flex justify-between items-center text-xs">
-         <button id="settingsBtn" class="flex items-center gap-2 text-gray-400 hover:text-white px-3 py-1.5 rounded-md hover:bg-gray-800 transition hover-trigger" data-desc="Open Settings to manage data, install tools, and configure the app.">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-            Settings <span id="errorCountBadge" class="hidden bg-red-500 text-white px-1 rounded-full text-[10px]">0</span>
-         </button>
-         
-         <div class="flex gap-2">
-             <button id="reorderBtn" class="p-1.5 text-gray-400 hover:text-white rounded-md hover:bg-gray-800 hover-trigger" data-desc="Enable Drag-and-Drop reordering (Available in 'All Stacks' view only).">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 18 12 22 16 18"/><polyline points="8 6 12 2 16 6"/><line x1="12" x2="12" y1="2" y2="22"/></svg>
-             </button>
-             <button id="quickGrabBtn" class="p-1.5 text-gray-400 hover:text-white rounded-md hover:bg-gray-800 hover-trigger" data-desc="Quickly paste a URL from your clipboard to add it instantly.">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/><path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"/><path d="M10 9V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5"/><path d="M18 11a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2v0a2 2 0 0 1-2-2v-4"/><path d="M14 10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2v0a2 2 0 0 1-2-2v-6"/><path d="M10 9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2v0a2 2 0 0 1-2-2v-8"/></svg>
-             </button>
-         </div>
+      <div id="pager" class="hidden p-2 justify-center bg-gray-900 border-t border-gray-800 gap-2"></div>
+      
+      <!-- Footer -->
+      <div class="p-3 bg-gray-900 border-t border-gray-800 flex justify-between items-center text-xs relative">
+         <button id="btnSettings" class="flex items-center gap-2 text-gray-400 hover:text-white px-3 py-1.5 rounded hover:bg-gray-800">⚙️ Settings <span id="badgeErr" class="hidden bg-red-500 text-white px-1 rounded-full text-[10px]">0</span></button>
+         <button id="btnReorder" class="p-1.5 text-gray-400 hover:text-white rounded hover:bg-gray-800" title="Reorder (All Stacks)">⇅</button>
       </div>
       
-      <!-- Multi Select Floating Footer -->
+      <!-- Multi Select Footer -->
       <div id="multiSelectFooter" class="absolute bottom-12 left-4 right-4 bg-blue-600 rounded-lg p-3 shadow-xl hidden flex justify-between items-center z-30">
          <span id="selectedCount" class="text-white text-sm font-medium">0 selected</span>
          <button id="launchSelectedBtn" class="bg-white text-blue-600 px-3 py-1 rounded text-xs font-bold uppercase tracking-wider hover:bg-gray-100">Launch</button>
       </div>
     </div>
 
-    <!-- RIGHT PANEL: Utility Dashboard (Fills empty space) -->
+    <!-- RIGHT PANEL: Dashboard (Preview Only) -->
     <div id="rightPanel" class="hidden lg:flex flex-1 flex-col bg-gray-950 relative overflow-hidden">
         
-        <!-- Top Scrolling Ticker -->
-        <div class="h-10 bg-gray-900/80 border-b border-gray-800 flex items-center overflow-hidden relative select-none">
-            <div class="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-gray-900 to-transparent z-10"></div>
-            <div class="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-gray-900 to-transparent z-10"></div>
-            <div class="ticker-wrap w-full overflow-hidden">
-                <div id="systemTicker" class="ticker-content text-xs font-mono text-blue-400">
-                    <!-- Populated by JS -->
-                    SYSTEM INITIALIZED... WAITING FOR INPUT... 
-                </div>
+        <!-- Preview Console Header -->
+        <div class="flex justify-between items-center p-2 border-b border-gray-800 bg-gray-900/95 backdrop-blur z-20">
+            <span class="text-xs text-gray-500 pl-2 font-mono tracking-widest">APP PREVIEW CONSOLE</span>
+            <div class="flex gap-2">
+                <button id="reloadPreviewBtn" class="text-xs bg-gray-800 hover:text-white text-gray-400 px-2 py-1 rounded border border-gray-700">⟳ Reload</button>
+                <button id="popOutBtn" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">↗ Pop Out</button>
+                <button id="clearPreviewBtn" class="text-xs bg-red-900/30 hover:bg-red-900/50 text-red-400 px-2 py-1 rounded border border-red-900/50">✕ Clear</button>
             </div>
         </div>
 
-        <!-- Main Dashboard Area -->
-        <div class="flex-1 flex flex-col items-center justify-center relative p-10">
-            <!-- Background Detail -->
-            <div class="absolute inset-0 opacity-20 pointer-events-none bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-gray-950 to-gray-950"></div>
-            
-            <!-- Clock & Date -->
-            <div class="z-10 text-center mb-12">
-                <div id="dashboardClock" class="text-7xl font-bold text-gray-100 tracking-tighter tabular-nums">00:00</div>
-                <div id="dashboardDate" class="text-lg text-blue-500 font-medium mt-2 uppercase tracking-widest">LOADING DATE</div>
+        <!-- Preview Area -->
+        <div id="tab-preview" class="flex-1 relative flex-col bg-gray-900 h-full flex">
+            <div id="previewPlaceholder" class="flex-1 flex flex-col items-center justify-center text-gray-600">
+                <div class="w-16 h-16 border-2 border-gray-700 rounded-lg flex items-center justify-center mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                </div>
+                <p class="text-sm">Select an app to execute</p>
             </div>
-
-            <!-- Stats Grid -->
-            <div class="z-10 grid grid-cols-3 gap-8 w-full max-w-2xl">
-                <div class="glass-panel p-4 rounded-xl text-center">
-                    <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Total Apps</div>
-                    <div id="statTotalApps" class="text-2xl font-bold text-white">0</div>
-                </div>
-                <div class="glass-panel p-4 rounded-xl text-center">
-                    <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Stacks</div>
-                    <div id="statTotalStacks" class="text-2xl font-bold text-white">0</div>
-                </div>
-                <div class="glass-panel p-4 rounded-xl text-center">
-                    <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">Favorites</div>
-                    <div id="statFavorites" class="text-2xl font-bold text-yellow-500">0</div>
-                </div>
-            </div>
-
-            <!-- Dynamic Help / Info Panel -->
-            <div class="z-10 mt-12 w-full max-w-2xl">
-                <div class="glass-panel rounded-xl p-6 border-l-4 border-blue-500 transition-all duration-300" id="contextInfoPanel">
-                    <h3 class="text-blue-400 text-sm font-bold uppercase tracking-widest mb-1" id="contextTitle">System Ready</h3>
-                    <p class="text-gray-300 text-sm" id="contextDesc">Hover over any button or element in the Stack Manager to see details here.</p>
-                </div>
-            </div>
-            
-            <!-- Preview Container (Hidden by default) -->
-            <div id="previewContainer" class="hidden absolute inset-0 bg-gray-900 z-50 flex-col">
-                <div class="flex justify-between items-center p-2 bg-gray-800 border-b border-gray-700">
-                    <span class="text-xs text-gray-400 pl-2">Live Preview</span>
-                    <button id="closePreviewBtn" class="text-gray-400 hover:text-white px-2">✕ Close</button>
-                </div>
-                <iframe id="previewFrame" class="flex-1 w-full border-none bg-white"></iframe>
-            </div>
+            <iframe id="previewFrame" class="flex-1 w-full border-none hidden bg-white"></iframe>
         </div>
     </div>
   </div>
 
-  <!-- STANDBY MODE OVERLAY (Full Screen Fixed) -->
-  <div id="standbyOverlay" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-gray-950 text-white">
-      <!-- Gradient Background -->
-      <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/30 via-gray-950 to-gray-950 pointer-events-none"></div>
-      
-      <div class="absolute top-8 right-8 z-50">
-          <button id="exitStandbyBtn" class="flex items-center gap-2 px-4 py-2 bg-gray-800/50 hover:bg-gray-700 rounded-full border border-gray-700 transition text-sm text-gray-300 backdrop-blur-sm">
-              Exit Standby <span class="text-gray-500">ESC</span>
-          </button>
+  <!-- Mobile Overlay for Preview -->
+  <div id="previewContainer" class="hidden fixed inset-0 bg-gray-900 z-50 flex-col">
+      <div class="flex justify-between items-center p-3 bg-gray-800 border-b border-gray-700">
+          <span class="text-sm font-medium text-white pl-2">Mobile Preview</span>
+          <button id="closePreviewBtn" class="text-gray-400 hover:text-white px-3 py-1 bg-gray-700 rounded text-xs">Close</button>
       </div>
+      <iframe id="mobilePreviewFrame" class="flex-1 w-full border-none bg-white"></iframe>
+  </div>
 
+  <!-- STANDBY MODE OVERLAY -->
+  <div id="standbyOverlay" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-gray-950 text-white">
+      <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/30 via-gray-950 to-gray-950 pointer-events-none"></div>
+      <div class="absolute top-8 right-8 z-50">
+          <button id="exitStandbyBtn" class="flex items-center gap-2 px-4 py-2 bg-gray-800/50 hover:bg-gray-700 rounded-full border border-gray-700 transition text-sm text-gray-300 backdrop-blur-sm">Exit</button>
+      </div>
       <div class="relative z-10 flex flex-col items-center">
           <canvas id="standby-logo-canvas" class="w-64 h-64 mb-6"></canvas>
-          <h1 class="text-4xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-500">Cloudstax</h1>
+          <h1 class="text-4xl font-bold tracking-tight">Cloudstax</h1>
           <p class="text-blue-500 text-sm font-medium tracking-[0.2em] mt-2 uppercase">System Standby</p>
-          
           <div class="mt-16 w-80">
               <div class="text-center mb-4 text-xs text-gray-600 font-mono uppercase">Recent Launches</div>
-              <div id="recentLinksList" class="space-y-2">
-                  <!-- Links injected here -->
-              </div>
+              <div id="recentLinksList" class="space-y-2"></div>
           </div>
       </div>
   </div>
 
   <!-- Generic Modal -->
-  <div id="modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
-    <div class="bg-gray-900 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-700 transform transition-all scale-100">
-      <div class="p-5 border-b border-gray-800 flex justify-between items-center">
-        <h2 id="modalTitle" class="text-lg font-semibold text-white">Modal</h2>
-        <button id="modalClose" class="text-gray-500 hover:text-white">✕</button>
-      </div>
-      <div id="modalBody" class="p-6 overflow-y-auto max-h-[70vh] text-gray-300 text-sm"></div>
-      <div id="modalFooter" class="p-4 bg-gray-900 border-t border-gray-800 flex gap-3 justify-end"></div>
+  <div id="modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[200] p-4">
+    <div class="bg-gray-900 rounded-xl w-full max-w-lg border border-gray-700 shadow-2xl">
+      <div class="p-4 border-b border-gray-800 flex justify-between"><h2 id="modalTitle" class="font-bold"></h2><button id="modalClose">✕</button></div>
+      <div id="modalBody" class="p-6 overflow-y-auto max-h-[60vh] text-sm text-gray-300"></div>
+      <div id="modalFooter" class="p-4 border-t border-gray-800 flex justify-end gap-2"></div>
     </div>
   </div>
   
-  <!-- Notification Toast -->
-  <div id="notification" class="hidden fixed bottom-6 right-6 bg-blue-600 text-white px-4 py-3 rounded-lg shadow-2xl text-sm font-medium z-[300] transition-all transform translate-y-0"></div>
+  <!-- Notification -->
+  <div id="notification" class="hidden fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-xl text-sm font-medium z-[300] text-white"></div>
 
-  <!-- App Logic -->
-  <script type"module">
-    const DB_NAME = 'cloudstax_db';
-    const DB_VERSION = 1; 
-    const STORE_NAME = 'bookmarks';
-    const STACK_ICONS_KEY = 'cloudstax_stack_icons';
-    const CLOUDSTAX_OPEN_MODE_KEY = 'cloudstax_open_mode';
-    const CLOUDSTAX_COMPACT_VIEW_KEY = 'cloudstax_compact_view';
-    const CREATOR_KEY = 'cloudstax_creator_links_v1';
-    const STACK_ICON_LIST = ["", "🚀", "🛠️", "✨", "💡", "📚", "💼", "🎵", "🎮", "🎨", "📰", "🛒", "☁️", "💰", "🏠", "❤️", "⭐", "🔗", "📁", "⚙️", "📈"];
+  <!-- LOGIC -->
+  <script>
+    const DB_N='cloudstax_db', DB_V=1, ST='bookmarks';
+    const ICONS=["","🚀","🛠️","✨","💡","📚","💼","🎵","🎮","🎨","📰","🛒","☁️","💰","🏠","❤️","⭐","🔗","📁","⚙️","📈"];
+    let db, all=[], sel=new Set(), errs=[], reorder=false, page=1, dSrc=null, recent=[], sIcons=new Map(), isCompact=false, curPreview=null;
+    const $=i=>document.getElementById(i);
 
-    let db;
-    let allBookmarks = [];
-    let selectedBookmarks = new Set();
-    let errorLog = []; 
-    let isReorderMode = false;
-    let currentPage = 1;
-    const itemsPerPage = 8;
-    let dragSrcEl = null;
-    let recentLaunches = [];
-    let stackIcons = new Map();
-    let globalOpenMode = 'default';
-    let isCompactView = false;
-    let hasStandbyBeenInitialized = false;
-    let searchDebounceTimer;
-    let addInputMode = 'link';
-
-    const $ = document.getElementById.bind(document);
-    const elements = {
-      nameIn: $('nameIn'), urlIn: $('urlIn'), codeIn: $('codeIn'),
-      codeInputWrapper: $('codeInputWrapper'), codeFileInput: $('codeFileInput'),
-      stackIn: $('stackIn'), openExternalIn: $('openExternalIn'), isFavoriteIn: $('isFavoriteIn'),
-      addBtn: $('addBtn'), searchIn: $('searchIn'), stackFilter: $('stackFilter'),
-      bookmarksList: $('bookmarksList'), bookmarksView: $('bookmarksView'),
-      loadingIndicator: $('loadingIndicator'),
-      modal: $('modal'), modalTitle: $('modalTitle'), modalBody: $('modalBody'), modalFooter: $('modalFooter'), modalClose: $('modalClose'),
-      notification: $('notification'), multiSelectFooter: $('multiSelectFooter'), selectedCount: $('selectedCount'), launchSelectedBtn: $('launchSelectedBtn'),
-      quickGrabBtn: $('quickGrabBtn'), settingsBtn: $('settingsBtn'), errorCountBadge: $('errorCountBadge'), reorderBtn: $('reorderBtn'), 
-      paginationControls: $('paginationControls'), mainStackDatalist: $('mainStackDatalist'), linkModeBtn: $('linkModeBtn'),
-      modeLinkBtn: $('modeLinkBtn'), modeCodeBtn: $('modeCodeBtn'),
-      standbyOverlay: $('standbyOverlay'), standbyBtn: $('standbyBtn'), exitStandbyBtn: $('exitStandbyBtn'), recentLinksList: $('recentLinksList'),
-      // Dashboard Elements
-      systemTicker: $('systemTicker'),
-      dashboardClock: $('dashboardClock'), dashboardDate: $('dashboardDate'),
-      statTotalApps: $('statTotalApps'), statTotalStacks: $('statTotalStacks'), statFavorites: $('statFavorites'),
-      contextInfoPanel: $('contextInfoPanel'), contextTitle: $('contextTitle'), contextDesc: $('contextDesc'),
-      previewContainer: $('previewContainer'), previewFrame: $('previewFrame'), closePreviewBtn: $('closePreviewBtn')
-    };
-
-    function logError(error, context) {
-        console.error(context, error);
-        errorLog.push({ time: new Date().toLocaleString(), message: error.message || 'Unknown', context, stack: error.stack });
-        elements.errorCountBadge.textContent = errorLog.length;
-        elements.errorCountBadge.classList.remove('hidden');
-    }
-
-    function debounce(func, delay) {
-        return function(...args) { clearTimeout(searchDebounceTimer); searchDebounceTimer = setTimeout(() => func.apply(this, args), delay); };
-    }
-
-    // --- Dashboard Logic ---
-    function updateDashboardClock() {
-        const now = new Date();
-        if(elements.dashboardClock) elements.dashboardClock.textContent = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-        if(elements.dashboardDate) elements.dashboardDate.textContent = now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'});
-    }
-    setInterval(updateDashboardClock, 1000); updateDashboardClock();
-
-    function updateDashboardStats() {
-        if(!elements.statTotalApps) return;
-        elements.statTotalApps.textContent = allBookmarks.length;
-        const stacks = new Set(allBookmarks.map(b => b.stack || "General"));
-        elements.statTotalStacks.textContent = stacks.size;
-        elements.statFavorites.textContent = allBookmarks.filter(b => b.isFavorite).length;
-    }
-
-    function updateTicker() {
-        const messages = [
-            "SYSTEM ONLINE", "MONITORING ACTIVE", "CLOUDSTAX v2.0", 
-            `TOTAL APPS: ${allBookmarks.length}`, 
-            "NO ERRORS DETECTED", 
-            "HAVE A PRODUCTIVE SESSION", 
-            "DATA INTEGRITY: 100%"
-        ];
-        if(errorLog.length > 0) messages.push(`⚠️ WARNING: ${errorLog.length} SYSTEM ERRORS LOGGED`);
-        
-        // Repeat messages to fill ticker
-        const text = messages.join("  ///  ") + "  ///  " + messages.join("  ///  ");
-        if(elements.systemTicker) elements.systemTicker.textContent = text;
-    }
-
-    function setContextInfo(title, desc) {
-        if(!elements.contextInfoPanel) return;
-        elements.contextTitle.textContent = title;
-        elements.contextDesc.textContent = desc;
-        elements.contextInfoPanel.classList.remove('border-blue-500');
-        void elements.contextInfoPanel.offsetWidth; // trigger reflow
-        elements.contextInfoPanel.classList.add('border-blue-500');
-    }
-
-    function initHoverListeners() {
-        const triggers = document.querySelectorAll('.hover-trigger');
-        triggers.forEach(el => {
-            el.addEventListener('mouseenter', () => {
-                const desc = el.dataset.desc || "Interact with this element.";
-                const title = el.getAttribute('placeholder') || el.textContent.trim() || "Control";
-                setContextInfo(title.substring(0, 20), desc);
-            });
-            el.addEventListener('mouseleave', () => {
-                setContextInfo("System Ready", "Hover over any button or element in the Stack Manager to see details here.");
-            });
-        });
-    }
-
-    function showPreview(url, isHtml) {
-        elements.previewContainer.classList.remove('hidden');
-        elements.previewContainer.classList.add('flex');
-        const doc = elements.previewFrame.contentWindow.document;
-        
-        if (isHtml) {
-            doc.open(); doc.write(url); doc.close();
-        } else {
-            // Check for potential X-Frame-Options issues or mixed content
-            // For simple usage:
-            elements.previewFrame.src = url;
-        }
-    }
+    // HELPERS
+    window.logError=(e,c)=>{ console.error(c,e); errs.push({t:new Date().toLocaleString(),m:e.message,c}); if($('badgeErr')){$('badgeErr').textContent=errs.length;$('badgeErr').classList.remove('hidden');} };
+    window.notify=(m,err)=>{ const t=$('notification'); t.textContent=m; t.className=`fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-xl text-sm font-medium z-[300] text-white ${err?'bg-red-600':'bg-blue-600'}`; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),3000); };
+    window.debounce=(f,d)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>f.apply(this,a),d); }; };
+    window.showModal=(t,b,f)=>{ $('modalTitle').textContent=t; $('modalBody').innerHTML=b; $('modalFooter').innerHTML=f||''; $('modal').classList.remove('hidden'); };
+    window.hideModal=()=>{ $('modal').classList.add('hidden'); $('modalBody').innerHTML=''; };
     
-    // --- Animations ---
-    function initThreeJS(canvasId, size=0.8) {
-        const c = document.getElementById(canvasId);
-        if (!c || !window.THREE) return;
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000); camera.position.z = 3;
-        const renderer = new THREE.WebGLRenderer({ canvas: c, alpha: true, antialias: true });
-        renderer.setSize(c.clientWidth * 2, c.clientHeight * 2); // High DPI
-        const geo = new THREE.TorusKnotGeometry(size, size/3, 100, 16);
-        const mat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, metalness: 0.5, roughness: 0.1 });
-        const mesh = new THREE.Mesh(geo, mat); scene.add(mesh);
-        const l1 = new THREE.AmbientLight(0xffffff, 0.5); scene.add(l1);
-        const l2 = new THREE.PointLight(0xffffff, 1); l2.position.set(2,3,4); scene.add(l2);
-        function animate() { requestAnimationFrame(animate); mesh.rotation.x+=0.005; mesh.rotation.y+=0.007; renderer.render(scene, camera); }
-        animate();
+    const sanitize=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
+    const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const normUrl=s=>{s=(s||'').trim(); if(!s)throw new Error('Empty'); if(/^(about|chrome|file|data):/.test(s))return s; return /^https?:\/\//i.test(s)?s:'https://'+s;};
+    const getFav=u=>u.startsWith('data:')||u==='app:local'?'':`https://www.google.com/s2/favicons?domain=${new URL(u).hostname}&sz=64`;
+
+    // DB
+    async function initDB(){return new Promise((r,j)=>{const q=indexedDB.open(DB_N,DB_V);q.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains(ST)){d.createObjectStore(ST,{keyPath:'id'}).createIndex('idx','idx',{unique:false});}};q.onsuccess=e=>{db=e.target.result;r(db);};q.onerror=j;});}
+    async function dbOp(op,val){return new Promise((r,j)=>{const tx=db.transaction([ST],'readwrite'),s=tx.objectStore(ST),q=op==='get'?s.getAll():op==='add'?s.add(val):op==='put'?s.put(val):s.delete(val);q.onsuccess=e=>r(e.target.result);q.onerror=j;});}
+    async function loadData(){try{all=await dbOp('get');all.sort((a,b)=>(a.idx||0)-(b.idx||0));refresh();}catch(e){logError(e,'Load');}}
+
+    // UI
+    function loadSettings(){
+        try{sIcons=new Map(Object.entries(JSON.parse(localStorage.getItem('cs_icons'))||{}));}catch{sIcons=new Map();}
+        isCompact=localStorage.getItem('cs_view')==='true';
+        recent=JSON.parse(localStorage.getItem('cs_recent')||'[]');
     }
 
-    // --- Core Logic ---
-    function normalizeUrl(s) {
-        s = String(s||'').trim(); if(!s) throw new Error('Empty URL');
-        if(/^(about|chrome|file|data):/.test(s)) return s;
-        if(!/^https?:\/\//i.test(s)) s = 'https://' + s;
-        try { new URL(s); return s; } catch(e){ return 'https://google.com/search?q='+encodeURIComponent(s); }
-    }
-    
-    function extractName(url) {
-        try { if(url.startsWith('data:')) return 'Data App'; 
-        return new URL(url).hostname.replace(/^www\./,''); } catch { return 'Link'; }
-    }
-
-    function getFavicon(url) {
-        if(url.startsWith('data:') || url === 'app:local') return '';
-        try { return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=64`; } catch { return ''; }
-    }
-
-    function showNotification(msg, isErr=false) {
-        elements.notification.textContent = msg;
-        elements.notification.className = `fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-2xl text-sm font-medium z-[300] transition-all transform translate-y-0 text-white ${isErr?'bg-red-600':'bg-blue-600'}`;
-        elements.notification.classList.remove('hidden');
-        setTimeout(() => elements.notification.classList.add('hidden'), 3000);
-    }
-
-    // --- DB & Data ---
-    async function initDB() {
-        return new Promise((res, rej) => {
-            const req = indexedDB.open(DB_NAME, DB_VERSION);
-            req.onupgradeneeded = e => {
-                const db = e.target.result;
-                if(!db.objectStoreNames.contains(STORE_NAME)) {
-                    const s = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-                    s.createIndex('orderIndex', 'orderIndex', { unique: false });
-                }
-            };
-            req.onsuccess = e => { db = e.target.result; res(db); };
-            req.onerror = e => rej(e);
-        });
-    }
-    
-    async function dbOp(type, mode, data) {
-        return new Promise((res, rej) => {
-            const tx = db.transaction([STORE_NAME], mode);
-            const store = tx.objectStore(STORE_NAME);
-            const req = type === 'getAll' ? store.getAll() : 
-                        type === 'add' ? store.add(data) :
-                        type === 'put' ? store.put(data) :
-                        type === 'delete' ? store.delete(data) : null;
-            req.onsuccess = e => res(e.target.result);
-            req.onerror = e => rej(e);
-        });
-    }
-
-    async function loadData() {
+    // INIT
+    async function init(){
         try {
-            allBookmarks = await dbOp('getAll', 'readonly');
-            allBookmarks.sort((a,b) => (a.orderIndex||0) - (b.orderIndex||0));
-            refreshUI();
-            updateDashboardStats();
-            updateTicker();
-        } catch(e) { logError(e, 'loadData'); }
-    }
-
-    // --- State Management Restoration (Fixes ReferenceError) ---
-    function loadStackIcons() {
-        try {
-            const data = JSON.parse(localStorage.getItem(STACK_ICONS_KEY)) || {};
-            stackIcons = new Map(Object.entries(data));
-        } catch (error) { logError(error, 'loadStackIcons'); stackIcons = new Map(); }
-    }
-
-    function saveStackIcons(newIconMap) {
-        try {
-            localStorage.setItem(STACK_ICONS_KEY, JSON.stringify(Object.fromEntries(newIconMap)));
-            stackIcons = newIconMap; 
-        } catch (error) { logError(error, 'saveStackIcons'); }
-    }
-
-    function saveCompactView(isCompact) {
-        try {
-            isCompactView = !!isCompact; 
-            localStorage.setItem(CLOUDSTAX_COMPACT_VIEW_KEY, isCompactView);
-            showNotification("View mode saved!");
-            refreshUI(); 
-        } catch (error) { logError(error, 'saveCompactView'); }
-    }
-
-    function saveOpenMode(mode) {
-        try {
-            if (['default', 'force-external', 'force-internal'].includes(mode)) {
-                globalOpenMode = mode;
-                localStorage.setItem(CLOUDSTAX_OPEN_MODE_KEY, mode);
-                showNotification("Link behavior saved!");
-                updateLinkModeBtnIcon(); 
-            }
-        } catch (error) { logError(error, 'saveOpenMode'); }
-    }
-
-    function toggleLinkMode() {
-        let newMode = globalOpenMode === 'default' ? 'force-external' : (globalOpenMode === 'force-external' ? 'force-internal' : 'default');
-        saveOpenMode(newMode); 
-    }
-
-    function updateLinkModeBtnIcon() {
-        let iconHtml = '', title = '';
-        const baseSvg = (paths) => `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
-        if (globalOpenMode === 'default') {
-            iconHtml = baseSvg(`<path d="M8 3H2v15h7c1.7 0 3 1.3 3 3V7c0-2.2-1.8-4-4-4Z"/><path d="m16 12 2 2 4-4"/><path d="M22 6V3h-6c-2.2 0-4 1.8-4 4v14c0-1.7 1.3-3 3-3h7V6Z"/>`);
-            title = 'Link Behavior: Default (Per-link setting)';
-        } else if (globalOpenMode === 'force-external') {
-            iconHtml = baseSvg(`<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/>`);
-            title = 'Link Behavior: Force All External';
-        } else { 
-            iconHtml = baseSvg(`<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>`);
-            title = 'Link Behavior: Force All Internal (New Tab)';
-        }
-        if(elements.linkModeBtn) {
-            elements.linkModeBtn.innerHTML = iconHtml;
-            elements.linkModeBtn.title = title;
-        }
-    }
-
-    // --- UI Rendering ---
-    function refreshUI() {
-        renderBookmarks();
-        updateMainStackDatalist();
-    }
-    
-    // --- ADDED MISSING FUNCTION ---
-    function updateMainStackDatalist() {
-        const stacks = [...new Set(allBookmarks.map(b => b.stack || "General"))].sort();
-        if (elements.mainStackDatalist) {
-            elements.mainStackDatalist.innerHTML = stacks.map(s => `<option value="${sanitize(s)}"></option>`).join('');
-        }
-    }
-    // ------------------------------
-
-    function renderBookmarks() {
-        elements.bookmarksView.className = `flex-1 overflow-y-auto p-2 space-y-2 bg-gray-900 custom-scrollbar ${isCompactView ? 'compact-mode' : ''}`;
-        const filter = elements.stackFilter.value;
-        const term = elements.searchIn.value.toLowerCase();
-        
-        let list = allBookmarks.filter(b => {
-            const stack = b.stack || "General";
-            const matchesSearch = b.name.toLowerCase().includes(term) || b.url.toLowerCase().includes(term) || stack.toLowerCase().includes(term);
-            const matchesStack = filter === "" || (filter === "Favorites" ? b.isFavorite : stack === filter);
-            return matchesSearch && matchesStack;
-        });
-
-        // Pagination/Reorder Logic
-        if(!isReorderMode) {
-            const total = list.length;
-            const start = (currentPage - 1) * itemsPerPage;
-            list = list.slice(start, start + itemsPerPage);
-            renderPagination(total);
-        } else {
-            elements.paginationControls.classList.add('hidden');
-        }
-
-        elements.bookmarksList.innerHTML = '';
-        if(list.length === 0) elements.bookmarksList.innerHTML = `<div class="text-center text-gray-500 py-10 text-sm">No items found.</div>`;
-
-        list.forEach(b => {
-            const icon = b.type === 'html' 
-                ? `<div class="w-8 h-8 bg-gray-800 rounded flex items-center justify-center text-blue-400"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>`
-                : `<img src="${sanitize(b.icon)}" class="w-8 h-8 rounded bg-white" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2224%22 height=%2224%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22gray%22 stroke-width=%222%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22/></svg>'">`;
-
-            const div = document.createElement('div');
-            div.className = `bookmark-item flex items-center gap-3 p-3 bg-gray-800/50 hover:bg-gray-800 border border-gray-700/50 rounded-lg transition group ${selectedBookmarks.has(b.id)?'border-blue-500 bg-blue-900/10':''}`;
-            div.draggable = isReorderMode;
-            if(isReorderMode) div.addEventListener('dragstart', handleDragStart); 
+            if($('modalClose')) $('modalClose').onclick=hideModal;
+            await initDB(); loadSettings(); initConsole(); await loadData(); initThreeJS('logo-canvas',0.6);
             
-            div.innerHTML = `
-                <div class="drag-handle ${isReorderMode?'block':'hidden'} text-gray-500 cursor-move">⋮⋮</div>
-                <input type="checkbox" class="form-checkbox ${isReorderMode?'hidden':''}" ${selectedBookmarks.has(b.id)?'checked':''} onchange="toggleSelect('${b.id}')">
-                ${icon}
-                <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium text-gray-200 truncate">${sanitize(b.name)}</div>
-                    <div class="text-xs text-gray-500 truncate">${sanitize(b.url)}</div>
-                </div>
-                <span class="text-[10px] bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full">${sanitize(b.stack||'General')}</span>
-                <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${isReorderMode?'hidden':''}">
-                    <button class="p-1.5 text-gray-400 hover:text-blue-400 hover-trigger" data-desc="Preview this site in the dashboard." onclick="previewItem('${b.id}')">👁️</button>
-                    <button class="p-1.5 ${b.isFavorite?'text-yellow-400':'text-gray-400'} hover:text-yellow-300 hover-trigger" data-desc="Toggle Favorite." onclick="toggleFav('${b.id}')">★</button>
-                    <button class="p-1.5 text-gray-400 hover:text-green-400 hover-trigger" data-desc="Launch this stack item." onclick="launchItem('${b.id}')">▶</button>
-                    <button class="p-1.5 text-gray-400 hover:text-blue-400" onclick="editItem('${b.id}')">✎</button>
-                    <button class="p-1.5 text-gray-400 hover:text-red-400" onclick="deleteItem('${b.id}')">✕</button>
-                </div>
-            `;
-            elements.bookmarksList.appendChild(div);
-        });
-        
-        // Populate Stack Filter
-        const stacks = [...new Set(allBookmarks.map(b => b.stack || "General"))].sort();
-        const currentStack = elements.stackFilter.value;
-        elements.stackFilter.innerHTML = '<option value="">All Stacks</option><option value="Favorites">Favorites</option>';
-        stacks.forEach(s => elements.stackFilter.innerHTML += `<option value="${sanitize(s)}">${sanitize(s)}</option>`);
-        elements.stackFilter.value = currentStack;
-        
-        // Populate Datalist
-        elements.mainStackDatalist.innerHTML = stacks.map(s => `<option value="${sanitize(s)}"></option>`).join('');
-        
-        initHoverListeners();
-    }
-
-    function renderPagination(total) {
-        const pages = Math.ceil(total / itemsPerPage);
-        elements.paginationControls.innerHTML = '';
-        elements.paginationControls.className = pages > 1 ? 'flex justify-center gap-2 p-2 bg-gray-900 border-t border-gray-800' : 'hidden';
-        if(pages <= 1) return;
-        
-        const prev = document.createElement('button'); prev.innerText = 'Prev'; prev.className = 'px-3 py-1 bg-gray-800 rounded text-xs hover:bg-gray-700';
-        prev.onclick = () => { currentPage--; refreshUI(); }; prev.disabled = currentPage===1;
-        
-        const next = document.createElement('button'); next.innerText = 'Next'; next.className = 'px-3 py-1 bg-gray-800 rounded text-xs hover:bg-gray-700';
-        next.onclick = () => { currentPage++; refreshUI(); }; next.disabled = currentPage===pages;
-        
-        elements.paginationControls.append(prev, next);
-    }
-
-    // --- Actions ---
-    window.toggleSelect = (id) => {
-        if(selectedBookmarks.has(id)) selectedBookmarks.delete(id); else selectedBookmarks.add(id);
-        const count = selectedBookmarks.size;
-        elements.multiSelectFooter.className = count > 0 ? 'absolute bottom-12 left-4 right-4 bg-blue-600 rounded-lg p-3 shadow-xl flex justify-between items-center z-30' : 'hidden';
-        elements.selectedCount.textContent = `${count} selected`;
-    };
-
-    window.toggleFav = async (id) => {
-        const b = allBookmarks.find(x=>x.id===id); if(b) { b.isFavorite=!b.isFavorite; await dbOp('put','readwrite',b); loadData(); }
-    };
-
-    window.deleteItem = async (id) => {
-        if(confirm("Delete this bookmark?")) { await dbOp('delete','readwrite',id); loadData(); showNotification("Deleted"); }
-    };
-
-    window.editItem = (id) => {
-        const b = allBookmarks.find(x=>x.id===id); if(!b) return;
-        const newName = prompt("Edit Name:", b.name);
-        if(newName) { b.name = newName; dbOp('put','readwrite',b).then(loadData); }
-    };
-
-    window.launchItem = (id) => {
-        const b = allBookmarks.find(x=>x.id===id); if(!b) return;
-        updateRecent(b);
-        if(b.type === 'html') {
-            const w = window.open('','_blank'); w.document.write(b.html); w.document.close();
-        } else {
-            if(globalOpenMode === 'force-external' || (globalOpenMode==='default' && b.openExternal)) {
-                const a = document.createElement('a'); a.href=b.url; a.target='_blank'; a.click();
-            } else {
-                window.open(b.url, '_blank');
-            }
-        }
-    };
-    
-    window.previewItem = (id) => {
-        const b = allBookmarks.find(x=>x.id===id); if(!b) return;
-        if(b.type === 'html') showPreview(b.html, true);
-        else showPreview(b.url, false);
-    };
-
-    function updateRecent(b) {
-        recentLaunches = [b, ...recentLaunches.filter(x=>x.id!==b.id)].slice(0, 5);
-        localStorage.setItem('cloudstax_recent', JSON.stringify(recentLaunches));
-    }
-
-    // --- Core Initialization ---
-    async function init() {
-        try {
-            await initDB();
-            loadStackIcons();
-            isCompactView = localStorage.getItem(CLOUDSTAX_COMPACT_VIEW_KEY) === 'true';
-            globalOpenMode = localStorage.getItem(CLOUDSTAX_OPEN_MODE_KEY) || 'default';
-            recentLaunches = JSON.parse(localStorage.getItem('cloudstax_recent') || '[]');
-            
-            updateLinkModeBtnIcon();
-            await loadData();
-            
-            initThreeJS('logo-canvas', 0.6);
-            
-            // Listeners
-            elements.addBtn.onclick = async () => {
-                const name = elements.nameIn.value;
-                const stack = elements.stackIn.value || "General";
-                const isFav = elements.isFavoriteIn.checked;
+            // Add Handler
+            $('btnAdd').onclick=async()=>{
+                const n=$('inName').value, st=$('inStack').value||"General", f=$('chkFav').checked;
+                const c=$('inCode').value;
+                if(!c) return notify("Code required", true);
                 
-                let b = { id: crypto.randomUUID(), name, stack, isFavorite: isFav, createdAt: new Date().toISOString(), orderIndex: allBookmarks.length };
+                let b = { id: crypto.randomUUID(), name: n||"App", stack: st, isFavorite: f, idx: all.length, createdAt: new Date().toISOString(), type: 'html', html: c, url: "app:local" };
                 
-                if(addInputMode === 'link') {
-                    if(!elements.urlIn.value) return showNotification("URL required", true);
-                    b.url = normalizeUrl(elements.urlIn.value);
-                    b.name = name || extractName(b.url);
-                    b.icon = getFavicon(b.url);
-                    b.openExternal = elements.openExternalIn.checked;
-                    b.type = 'link';
-                } else {
-                    if(!elements.codeIn.value) return showNotification("Code required", true);
-                    b.name = name || "App";
-                    b.html = elements.codeIn.value;
-                    b.url = "app:local";
-                    b.type = 'html';
-                }
-                
-                await dbOp('add', 'readwrite', b);
-                showNotification("Added!");
-                elements.urlIn.value = ''; elements.nameIn.value = ''; elements.codeIn.value = '';
+                await dbOp('add',b); 
+                notify("App Created!"); 
+                $('inName').value=''; $('inCode').value='';
                 loadData();
+                preview(b.id);
             };
 
-            elements.modeLinkBtn.onclick = () => {
-                addInputMode = 'link';
-                elements.urlIn.classList.remove('hidden'); elements.codeInputWrapper.classList.add('hidden');
-                elements.modeLinkBtn.className = 'text-xs font-medium pb-1 transition mode-tab-active hover-trigger';
-                elements.modeCodeBtn.className = 'text-xs font-medium pb-1 transition mode-tab-inactive hover-trigger';
-            };
+            $('inFile').onchange=e=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=v=>{ $('inCode').value=v.target.result; if(!$('#inName').value) $('#inName').value=f.name.replace(/\.[^/.]+$/, ""); }; r.readAsText(f);}};
+            $('clearCode').onclick=()=>$('inCode').value='';
             
-            elements.modeCodeBtn.onclick = () => {
-                addInputMode = 'code';
-                elements.urlIn.classList.add('hidden'); elements.codeInputWrapper.classList.remove('hidden'); elements.codeInputWrapper.classList.add('flex');
-                elements.modeLinkBtn.className = 'text-xs font-medium pb-1 transition mode-tab-inactive hover-trigger';
-                elements.modeCodeBtn.className = 'text-xs font-medium pb-1 transition mode-tab-active hover-trigger';
-            };
+            $('inSearch').oninput=debounce(()=>refresh(),300); $('selFilter').onchange=refresh;
+            $('btnSettings').onclick=showSettings;
+            $('btnReorder').onclick=()=>{if($('selFilter').value!=="")return notify("Select 'All Stacks'",true); reorder=!reorder; refresh(); notify(reorder?"Drag ON":"Drag OFF");};
             
-            elements.codeFileInput.onchange = e => {
-                const f = e.target.files[0]; if(!f) return;
-                const r = new FileReader(); r.onload = ev => elements.codeIn.value = ev.target.result; r.readAsText(f);
+            $('standbyBtn').onclick=()=>{
+                $('standbyOverlay').classList.remove('hidden'); initThreeJS('standby-logo-canvas',1);
+                $('recentLinksList').innerHTML=recent.map(b=>`<button class="w-full text-left p-2 bg-gray-900 rounded mb-1 text-sm hover:bg-gray-800 transition border border-gray-800" onclick="$('standbyOverlay').classList.add('hidden');launch('${b.id}')"><span class="text-blue-500">●</span> ${esc(b.name)}</button>`).join('')||'<div class="text-gray-500 text-xs text-center">No recent apps</div>';
             };
+            $('exitStandbyBtn').onclick=()=>$('standbyOverlay').classList.add('hidden');
+            if($('closePreviewBtn')) $('closePreviewBtn').onclick=()=>$('previewContainer').classList.add('hidden');
 
-            elements.standbyBtn.onclick = () => {
-                elements.standbyOverlay.classList.remove('hidden');
-                initThreeJS('standby-logo-canvas', 1);
-                elements.recentLinksList.innerHTML = recentLaunches.length ? '' : '<div class="text-gray-600 text-center text-xs">No recent apps</div>';
-                recentLaunches.forEach(b => {
-                    const btn = document.createElement('button');
-                    btn.className = "w-full text-left p-2 bg-gray-900 hover:bg-gray-800 rounded flex items-center gap-2 text-sm text-gray-300 transition border border-gray-800";
-                    btn.innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-500"></span> ${sanitize(b.name)}`;
-                    btn.onclick = () => { elements.standbyOverlay.classList.add('hidden'); launchItem(b.id); };
-                    elements.recentLinksList.appendChild(btn);
-                });
-            };
-            
-            elements.exitStandbyBtn.onclick = () => elements.standbyOverlay.classList.add('hidden');
-            elements.closePreviewBtn.onclick = () => elements.previewContainer.classList.add('hidden');
-            
-            elements.searchIn.oninput = debounce(() => refreshUI(), 300);
-            elements.stackFilter.onchange = () => refreshUI();
-            
-            elements.settingsBtn.onclick = handleShowSettings;
-            
-            // Reordering
-            elements.reorderBtn.onclick = () => {
-                if(elements.stackFilter.value !== "") return showNotification("Select 'All Stacks' to reorder", true);
-                isReorderMode = !isReorderMode;
-                refreshUI();
-            };
-            
-            // Quick Grab
-            elements.quickGrabBtn.onclick = handleQuickGrabModal;
-            
-            // Link Mode Toggle
-            elements.linkModeBtn.onclick = toggleLinkMode;
+            $('modalBody').addEventListener('change', e=>{ if(e.target.id==='sCmp'){isCompact=e.target.checked; localStorage.setItem('cs_view',isCompact); refresh();} });
+            $('modalBody').addEventListener('click', handleModalClicks);
 
-            // Modal Listeners
-            elements.modalFooter.addEventListener('click', handleModalClicks);
-            elements.modalBody.addEventListener('change', handleModalChanges);
-
-            initHoverListeners();
-
-        } catch(e) { logError(e, "Init"); }
+        }catch(e){logError(e,"Init");}
     }
 
-    // Drag Drop Placeholder
-    function handleDragStart(e) { dragSrcEl = this; e.dataTransfer.effectAllowed = 'move'; }
-
-    // --- Settings Modal & Logic ---
-    function handleShowSettings() {
-        // Build Icon Options
-        const stacks = [...new Set(allBookmarks.map(b => b.stack || "General"))].sort();
-        const iconOpts = STACK_ICON_LIST.map(i => `<option value="${i}">${i||'None'}</option>`).join('');
-        let iconHtml = '<div class="space-y-2 max-h-40 overflow-y-auto p-2 bg-gray-800 rounded border border-gray-700">';
-        if(stacks.length) {
-            iconHtml += stacks.map(s => {
-                const curr = stackIcons.get(s) || '';
-                return `<div class="flex justify-between items-center"><label class="text-xs text-gray-400">${sanitize(s)}</label><select class="stack-icon-select bg-gray-700 text-white rounded text-xs p-1" data-stack="${sanitize(s)}">${iconOpts.replace(`value="${curr}"`, `value="${curr}" selected`)}</select></div>`;
-            }).join('');
-        } else iconHtml += '<p class="text-xs text-gray-500">No stacks yet.</p>';
-        iconHtml += '</div><button id="modalSaveIcons" class="w-full mt-2 py-1 bg-blue-600 rounded text-xs hover:bg-blue-500">Save Icons</button>';
-
-        const body = `
-        <div class="space-y-4">
-            <h3 class="font-bold border-b border-gray-700 pb-2 text-white">Appearance & Behavior</h3>
-            <label class="flex items-center"><input id="modalCompactView" type="checkbox" class="form-checkbox" ${isCompactView?'checked':''}><span class="ml-2 text-sm text-gray-300">Compact View</span></label>
-            <div class="space-y-1">
-                <p class="text-xs text-gray-400 uppercase">Link Opening Mode</p>
-                <label class="flex items-center"><input type="radio" name="link-behavior" value="default" class="form-radio" ${globalOpenMode==='default'?'checked':''}><span class="ml-2 text-sm text-gray-300">Default (Per Link)</span></label>
-                <label class="flex items-center"><input type="radio" name="link-behavior" value="force-external" class="form-radio" ${globalOpenMode==='force-external'?'checked':''}><span class="ml-2 text-sm text-gray-300">Force External Browser</span></label>
-                <label class="flex items-center"><input type="radio" name="link-behavior" value="force-internal" class="form-radio" ${globalOpenMode==='force-internal'?'checked':''}><span class="ml-2 text-sm text-gray-300">Force Internal Tab</span></label>
-            </div>
-
-            <h3 class="font-bold border-b border-gray-700 pb-2 pt-2 text-white">Stack Customization</h3>
-            ${iconHtml}
-            
-            <h3 class="font-bold border-b border-gray-700 pb-2 pt-2 text-white">Data Management</h3>
-            <div class="flex gap-2">
-                <button id="modalImportJson" class="flex-1 bg-gray-700 hover:bg-gray-600 p-2 rounded text-sm">Import JSON</button>
-                <button id="modalExportData" class="flex-1 bg-gray-700 hover:bg-gray-600 p-2 rounded text-sm">Export JSON</button>
-            </div>
-            
-             <h3 class="font-bold border-b border-gray-700 pb-2 pt-2 text-white">Stack Tools</h3>
-            <div class="flex gap-2">
-                <button id="modalCreateStack" class="flex-1 bg-gray-700 hover:bg-gray-600 p-2 rounded text-sm">Create Preset</button>
-                <button id="modalImportStack" class="flex-1 bg-gray-700 hover:bg-gray-600 p-2 rounded text-sm">Import Preset</button>
-            </div>
-            <button id="modalInstallTools" class="w-full bg-gray-700 hover:bg-gray-600 p-2 rounded text-sm mt-2 text-left">Install Default Tools</button>
-
-            <h3 class="font-bold border-b border-gray-700 pb-2 pt-2 text-white">Diagnostics</h3>
-            <button id="modalViewLog" class="w-full bg-gray-700 hover:bg-gray-600 p-2 rounded text-sm text-left">View Error Log</button>
-        </div>`;
-        showModal("Settings", body, `<button id="closeSettings" class="bg-gray-600 px-4 py-2 rounded text-sm hover:bg-gray-500 transition">Close</button>`);
-    }
-
-    function handleModalClicks(e) {
-        const id = e.target.id;
-        if(id === 'closeSettings') hideModal();
-        if(id === 'modalExportData') exportBookmarks();
-        if(id === 'modalImportJson') { hideModal(); handleImportJson(); }
-        if(id === 'modalCreateStack') { hideModal(); handleShowStackCreator(); }
-        if(id === 'modalImportStack') { hideModal(); handleImportStackPreset(); }
-        if(id === 'modalInstallTools') { hideModal(); handleInstallTools(); }
-        if(id === 'modalSaveIcons') {
-            const m = new Map();
-            document.querySelectorAll('.stack-icon-select').forEach(s => { if(s.dataset.stack) m.set(s.dataset.stack, s.value); });
-            saveStackIcons(m); showNotification("Icons Saved"); refreshUI();
-        }
-        if(id === 'modalViewLog') {
-             hideModal(); 
-             const logHtml = errorLog.length ? errorLog.map(e=>`<div><span class="text-blue-400">[${e.time}]</span> ${e.message}</div>`).join('') : '<div class="text-gray-500">No errors.</div>';
-             showModal("Error Log", `<div class="max-h-60 overflow-auto bg-gray-950 p-3 font-mono text-xs text-red-400 rounded border border-gray-800">${logHtml}</div>`, `<button id="clearLog" class="bg-red-600 px-3 py-1 rounded text-xs mr-2">Clear</button><button id="closeLog" class="bg-gray-600 px-3 py-1 rounded text-xs">Close</button>`);
-             $('clearLog').onclick = () => { errorLog=[]; elements.errorCountBadge.classList.add('hidden'); hideModal(); };
-             $('closeLog').onclick = hideModal;
-        }
-    }
-
-    function handleModalChanges(e) {
-        if(e.target.id === 'modalCompactView') saveCompactView(e.target.checked);
-        if(e.target.name === 'link-behavior') saveOpenMode(e.target.value);
-    }
-
-    // --- Helper for Quick Grab ---
-    function handleQuickGrabModal() {
-        const body = `<p class="text-sm text-gray-300 mb-2">Paste link:</p><input id="quickGrabInput" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white" placeholder="https://..."><input id="quickGrabStackInput" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white mt-2" placeholder="Stack Name">`;
-        showModal("Quick Grab", body, `<button id="doQuickGrab" class="bg-blue-600 px-4 py-2 rounded text-sm">Add</button>`);
-        $('doQuickGrab').onclick = async () => {
-            if(await processQuickGrabPaste($('quickGrabInput').value, $('quickGrabStackInput').value || "Quick Stack")) hideModal();
-        };
+    function initConsole(){
+        $('reloadPreviewBtn').onclick=()=>{ if(curPreview) preview(curPreview); };
+        $('popOutBtn').onclick=()=>{ if(curPreview){ const b=all.find(x=>x.id===curPreview); if(b){ const w=window.open('','_blank'); w.document.write(b.type==='html'?b.html:b.url); w.document.close(); } } };
+        $('clearPreviewBtn').onclick=()=>{ $('previewFrame').src='about:blank'; $('previewPlaceholder').classList.remove('hidden'); $('previewFrame').classList.add('hidden'); curPreview=null; };
     }
     
-    async function processQuickGrabPaste(text, stackName) {
-        if(!text) return false;
-        try {
-            const url = normalizeUrl(text);
-            await dbOp('add', 'readwrite', { id: crypto.randomUUID(), name: extractName(url), url, stack: stackName, icon: getFavicon(url), createdAt: new Date().toISOString(), orderIndex: allBookmarks.length });
-            loadData(); showNotification("Grabbed!"); return true;
-        } catch(e) { logError(e,'QuickGrab'); return false; }
+    window.preview=id=>{
+        const b=all.find(x=>x.id===id); if(!b)return; curPreview=id;
+        const u=b.type==='html'?b.html:b.url;
+        if(window.innerWidth>=1024){
+            $('previewPlaceholder').classList.add('hidden'); $('previewFrame').classList.remove('hidden');
+            const d=$('previewFrame').contentWindow.document; if(b.type==='html'){d.open();d.write(u);d.close();} else $('previewFrame').src=u;
+        } else {
+            $('previewContainer').classList.remove('hidden'); $('previewContainer').classList.add('flex');
+            const d=$('mobilePreviewFrame').contentWindow.document; if(b.type==='html'){d.open();d.write(u);d.close();} else $('mobilePreviewFrame').src=u;
+        }
     }
+
+    function refresh(){
+        const stacks=[...new Set(all.map(b=>b.stack||"General"))].sort(); $('dlStacks').innerHTML=stacks.map(s=>`<option value="${esc(s)}"></option>`).join('');
+        const cur=$('selFilter').value; $('selFilter').innerHTML=`<option value="">All Stacks</option><option value="Fav">Favorites</option>`+stacks.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join(''); $('selFilter').value=cur;
+        
+        $('bookmarksView').className=`flex-1 overflow-y-auto p-2 bg-gray-900 space-y-2 custom-scrollbar ${isCompact?'compact':''}`;
+        const t=$('inSearch').value.toLowerCase(), f=$('selFilter').value;
+        let l=all.filter(b=>{const s=b.stack||"General"; return (b.name.toLowerCase().includes(t)||(b.url&&b.url.toLowerCase().includes(t))||s.toLowerCase().includes(t))&&(f===""||(f==="Fav"?b.isFavorite:s===f));});
+        
+        if(!reorder){ const pg=Math.ceil(l.length/8); if(pg>1){$('pager').innerHTML=`<button onclick="pg(${page-1})" ${page===1?'disabled':''} class="px-2 bg-gray-800 rounded text-xs">Prev</button><span class="text-gray-500 text-xs mx-2">${page}/${pg}</span><button onclick="pg(${page+1})" ${page===pg?'disabled':''} class="px-2 bg-gray-800 rounded text-xs">Next</button>`;$('pager').classList.remove('hidden');l=l.slice((page-1)*8,page*8);}else $('pager').classList.add('hidden');}else $('pager').classList.add('hidden');
+        
+        $('listContainer').innerHTML=l.length?'':`<div class="text-center text-gray-500 py-10 text-xs">No apps found</div>`;
+        l.forEach(b=>{
+            const div=document.createElement('div'); div.className=`bookmark-item flex items-center gap-3 p-3 bg-gray-800/50 hover:bg-gray-800 border border-gray-700/50 rounded-lg transition group ${sel.has(b.id)?'border-blue-500':''}`;
+            div.dataset.id=b.id; div.dataset.bookmarkId=b.id; div.draggable=reorder;
+            if(reorder){div.ondragstart=dStart;div.ondragover=dOver;div.ondrop=dDrop;}
+            const ico=b.type==='html'?'<div class="w-8 h-8 bg-gray-800 rounded flex items-center justify-center text-blue-400 text-xs">&lt;/&gt;</div>':`<img src="${esc(b.icon)}" class="w-8 h-8 rounded bg-white" onerror="this.style.display='none'">`;
+            div.innerHTML=`<div class="drag-handle ${reorder?'block':'hidden'} text-gray-500 cursor-move">⋮</div><input type="checkbox" class="form-checkbox ${reorder?'hidden':''}" ${sel.has(b.id)?'checked':''} onchange="togSel('${b.id}')">${ico}<div class="flex-1 min-w-0"><div class="text-sm font-medium text-gray-200 truncate">${esc(b.name)}</div><div class="text-xs text-gray-500 truncate">${esc(b.url==='app:local'?'Local App':b.url)}</div></div><span class="text-[10px] bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full">${sIcons.get(b.stack)||''} ${esc(b.stack||'General')}</span><div class="flex gap-1 opacity-0 group-hover:opacity-100 transition ${reorder?'hidden':''}"><button class="p-1.5 text-gray-400 hover:text-blue-400" onclick="preview('${b.id}')">👁️</button><button class="p-1.5 ${b.isFavorite?'text-yellow-400':'text-gray-400'}" onclick="fav('${b.id}')">★</button><button class="p-1.5 text-gray-400 hover:text-green-400" onclick="launch('${b.id}')">▶</button><button class="p-1.5 text-gray-400 hover:text-blue-400" onclick="edt('${b.id}')">✎</button><button class="p-1.5 text-gray-400 hover:text-red-400" onclick="del('${b.id}')">✕</button></div>`;
+            $('listContainer').appendChild(div);
+        });
+    }
+
+    window.pg=p=>{page=p;refresh();}
+    window.togSel=i=>{sel.has(i)?sel.delete(i):sel.add(i);const c=sel.size;$('multiSelectFooter').className=c?'absolute bottom-12 left-4 right-4 bg-blue-600 rounded-lg p-3 shadow-xl flex justify-between items-center z-30':'hidden';$('selectedCount').innerText=`${c} selected`;};
+    window.fav=async i=>{const b=all.find(x=>x.id===i);if(b){b.isFavorite=!b.isFavorite;await dbOp('put',b);loadData();}};
+    window.del=async i=>{if(confirm('Delete?')){await dbOp('delete',i);loadData();notify('Deleted');}};
+    window.edt=i=>{
+        const b=all.find(x=>x.id===i);if(!b)return; const s=[...new Set(all.map(x=>x.stack||"General"))].sort().map(o=>`<option value="${esc(o)}">`).join('');
+        showModal("Edit App",`<div class="space-y-3"><input id="eN" value="${esc(b.name)}" class="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white"><textarea id="eC" class="w-full h-32 bg-gray-800 border border-gray-600 rounded p-2 text-white font-mono">${esc(b.type==='html'?b.html:b.url)}</textarea><input id="eS" value="${esc(b.stack)}" list="eSl" class="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white"><datalist id="eSl">${s}</datalist><div class="flex gap-4 text-gray-400"><label><input type="checkbox" id="eF" ${b.isFavorite?'checked':''}> Favorite</label></div></div>`,`<button id="eSv" class="bg-blue-600 px-4 py-2 rounded hover:bg-blue-500">Save</button>`);
+        $('eSv').onclick=async()=>{b.name=$('eN').value;b.stack=$('eS').value||"General";b.isFavorite=$('eF').checked;if(b.type==='html')b.html=$('eC').value; else b.url=$('eC').value; await dbOp('put',b);hideModal();loadData();notify("Updated");};
+    }
+    window.launch=i=>{const b=all.find(x=>x.id===i);if(b){recent=[b,...recent.filter(x=>x.id!==b.id)].slice(0,5);localStorage.setItem('cs_recent',JSON.stringify(recent));if(b.type==='html'){const w=window.open('','_blank');w.document.write(b.html);w.document.close();}else{window.open(b.url,'_blank');}}};
+
+    function showSettings(){
+        const s=[...new Set(all.map(b=>b.stack||"General"))].sort(); const ic=ICONS.map(i=>`<option value="${i}">${i||'None'}</option>`).join('');
+        const h=s.map(x=>`<div class="flex justify-between items-center py-1"><label class="text-xs text-gray-400">${esc(x)}</label><select class="ic bg-gray-700 rounded text-xs p-1" data-s="${esc(x)}">${ic.replace(`"${sIcons.get(x)||''}"`,`"${sIcons.get(x)||''}" selected`)}</select></div>`).join('');
+        const sysStats = `
+            <div class="grid grid-cols-3 gap-2 mb-4 text-center">
+                <div class="bg-gray-800 p-2 rounded"><div class="text-[10px] text-gray-500">APPS</div><div class="font-bold">${all.length}</div></div>
+                <div class="bg-gray-800 p-2 rounded"><div class="text-[10px] text-gray-500">STACKS</div><div class="font-bold">${s.length}</div></div>
+                <div class="bg-gray-800 p-2 rounded"><div class="text-[10px] text-gray-500">FAVS</div><div class="font-bold text-yellow-500">${all.filter(x=>x.isFavorite).length}</div></div>
+            </div>
+            <div class="text-center text-xs text-gray-500 mb-4 font-mono" id="sTime">${new Date().toLocaleString()}</div>
+        `;
+        
+        showModal("Settings",`
+            ${sysStats}
+            <div class="space-y-4">
+                <label class="flex items-center"><input id="sCmp" type="checkbox" class="form-checkbox" ${isCompact?'checked':''}> Compact View</label>
+                <div class="border-t border-gray-700 pt-2"><h3 class="font-bold mb-2">Icons</h3><div class="max-h-32 overflow-y-auto pr-1">${h}</div><button id="sSvI" class="w-full mt-2 bg-blue-600 rounded py-1 text-xs">Save Icons</button></div><div class="flex gap-2"><button id="sExp" class="flex-1 bg-gray-700 py-1 rounded text-xs">Export</button><button id="sImp" class="flex-1 bg-gray-700 py-1 rounded text-xs">Import</button></div><button id="sTools" class="w-full bg-gray-700 py-1 rounded text-xs">Install Tools</button></div>`,`<button onclick="hideModal()" class="text-gray-400 text-xs">Close</button>`);
+        
+        $('sSvI').onclick=()=>{document.querySelectorAll('.ic').forEach(s=>sIcons.set(s.dataset.s,s.value));localStorage.setItem('cs_icons',JSON.stringify(Object.fromEntries(sIcons)));notify("Saved");refresh();};
+        $('sExp').onclick=()=>{const a=document.createElement('a');a.href="data:text/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(all));a.download='backup.json';a.click();};
+        $('sImp').onclick=()=>{showModal("Import",`<input type="file" id="fImp" class="text-sm text-gray-400">`,`<button id="doImp" class="bg-blue-600 px-3 py-1 rounded text-xs">Load</button>`);$('doImp').onclick=()=>{const f=$('fImp').files[0];if(f){const r=new FileReader();r.onload=async e=>{try{const d=JSON.parse(e.target.result);for(const i of d){i.id=crypto.randomUUID();await dbOp('add',i);}loadData();hideModal();notify("Imported");}catch{notify("Error",true);}};r.readAsText(f);}}};
+        $('sTools').onclick=async()=>{try{const r=await fetch('https://junkyardai.github.io/Cloudstax-Default-Tools/');const t=await r.text();const p=new DOMParser().parseFromString(t,'text/html');p.querySelectorAll('a').forEach(async a=>{if(a.href.startsWith('http')){await dbOp('add',{id:crypto.randomUUID(),name:a.innerText,url:a.href,stack:"Tools",icon:'',idx:all.length,type:'link'});}});loadData();notify("Tools Installed");hideModal();}catch{notify("Fetch Error",true);}};
+    }
+    
+    function dStart(e){dSrc=this;e.dataTransfer.effectAllowed='move';this.classList.add('dragging');}
+    function dOver(e){e.preventDefault();this.classList.add('drag-over');return false;}
+    function dDrop(e){e.stopPropagation();if(dSrc!==this){$('listContainer').insertBefore(dSrc,this);saveOrder();}return false;}
+    function dEnd(e){this.classList.remove('dragging');document.querySelectorAll('.bookmark-item').forEach(i=>i.classList.remove('drag-over'));}
+    async function saveOrder(){const i=document.querySelectorAll('.bookmark-item');for(let x=0;x<i.length;x++){const b=all.find(z=>z.id===i[x].dataset.id);if(b){b.idx=x;await dbOp('put',b);}}notify("Reordered");}
+    function handleModalClicks(e) { if(e.target.id==='closeSettings') hideModal(); if(e.target.id==='modalExportData') exportBookmarks(); if(e.target.id==='modalImportJson') handleImportJson(); }
+    function initThreeJS(cid){const c=$(cid);if(!c||!window.THREE)return;const s=new THREE.Scene(),cm=new THREE.PerspectiveCamera(75,1,0.1,1000),r=new THREE.WebGLRenderer({canvas:c,alpha:true,antialias:true});cm.position.z=3;const g=new THREE.TorusKnotGeometry(cid==='logo-canvas'?0.6:1,0.2,100,16),m=new THREE.MeshStandardMaterial({color:0x3b82f6});const mesh=new THREE.Mesh(g,m);s.add(mesh);s.add(new THREE.AmbientLight(0xffffff,0.5));const l=new THREE.PointLight(0xffffff,1);l.position.set(2,3,4);s.add(l);const a=()=>{requestAnimationFrame(a);mesh.rotation.x+=0.01;mesh.rotation.y+=0.01;r.render(s,cm);};a();}
 
     document.addEventListener('DOMContentLoaded', init);
   </script>
