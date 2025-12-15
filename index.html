@@ -235,7 +235,7 @@
       <!-- Resizable Content -->
       <div class="flex-1 flex overflow-hidden relative">
           <!-- Left Panel -->
-          <div id="editorLeft" class="w-[500px] flex flex-col bg-gray-900 border-r border-gray-800 relative shrink-0 min-w-[0px] transition-all duration-300">
+          <div id="editorLeft" class="w-[500px] flex flex-col bg-gray-900 border-r border-gray-800 relative shrink-0 min-w-[0px]">
               
               <!-- Editor Toolbar -->
               <div class="p-2 border-b border-gray-800 flex justify-between items-center bg-gray-800/30">
@@ -292,7 +292,7 @@
           <div id="mainResizer" class="resizer w-1 hover:w-2 bg-gray-800 hover:bg-blue-500 cursor-col-resize z-40 transition-all"></div>
 
           <!-- Right Panel (Preview) -->
-          <div id="editorRight" class="flex-1 bg-gray-950 flex flex-col min-w-[0px] relative transition-all duration-300">
+          <div id="editorRight" class="flex-1 bg-gray-950 flex flex-col min-w-[0px] relative">
                <div class="h-8 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-2">
                    <span class="text-[10px] font-mono text-gray-500 tracking-widest">LIVE PREVIEW</span>
                    <div class="flex gap-2">
@@ -369,6 +369,9 @@
     // --- CORE CONSTANTS & STATE ---
     const DB_N='cloudstax_v2', DB_V=1, ST='apps';
     let db, all=[], editorCM=null, currentAppId=null, sIcons=new Map();
+    // Memory for editor layout
+    let lastSplitWidth = '500px';
+
     const GOOGLE_ICONS = [
         "search","home","settings","close","menu","check","favorite","add","delete","edit","arrow_back","arrow_forward","refresh","download","upload","cloud","folder","image","description","content_copy","save","lock","person","dashboard","terminal","code","bug_report","extension","language","help","info","warning","error","check_circle","schedule","calendar_today","chat","mail","call","notifications","share","link","public","rocket","bolt","build","palette","brush","music_note","videocam","photo_camera","monitor","smartphone","mouse","keyboard","wifi","bluetooth","battery_full","light_mode","dark_mode","grid_view","list","sort","filter_list","login","logout","history","visibility","visibility_off","play_arrow","pause","stop","volume_up","mic","camera","map","location_on","shopping_cart","attach_money","credit_card","receipt","account_balance","work","group","school","science","emoji_events","star","face","thumb_up"
     ];
@@ -716,7 +719,7 @@
             $('viewPreview').classList.add('active');
         } else {
             // Split (Default)
-            left.style.width = '500px'; 
+            left.style.width = lastSplitWidth; 
             left.style.flex = 'none';
             $('viewSplit').classList.add('active');
         }
@@ -973,7 +976,13 @@
         const resizer = $('mainResizer');
         const left = $('editorLeft');
         let x = 0, w = 0, dragging = false;
-        const onMove = e => { if(!dragging) return; left.style.width = `${w + e.clientX - x}px`; editorCM.refresh(); };
+        
+        const onMove = e => { if(!dragging) return; 
+            const newW = w + e.clientX - x;
+            left.style.width = `${newW}px`; 
+            lastSplitWidth = `${newW}px`; // Remember width
+            editorCM.refresh(); 
+        };
         const onUp = () => { dragging = false; resizer.classList.remove('resizing'); document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); $('editorPreviewFrame').style.pointerEvents = 'auto'; };
         resizer.addEventListener('mousedown', e => { x = e.clientX; w = left.getBoundingClientRect().width; dragging = true; resizer.classList.add('resizing'); $('editorPreviewFrame').style.pointerEvents = 'none'; document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp); });
     }
