@@ -700,30 +700,42 @@
         const right = $('editorRight');
         const resizer = $('mainResizer');
         
-        // Reset Logic
-        left.classList.remove('hidden', 'flex-1');
-        right.classList.remove('hidden', 'flex-1');
+        // 1. Reset all classes/styles first
+        left.classList.remove('hidden', 'flex-1', 'w-full');
+        right.classList.remove('hidden', 'flex-1', 'w-full');
         resizer.classList.remove('hidden');
+        
+        // Clear specific styles that interfere
+        left.style.flex = ''; 
+        left.style.width = ''; 
         
         document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
         
         if (mode === 'code') {
+            // Code Mode: Left takes full width, Right hidden
             right.classList.add('hidden');
-            left.classList.add('flex-1');
+            left.classList.add('flex-1'); 
+            left.style.width = '100%'; // Force full width
             resizer.classList.add('hidden');
             $('viewCode').classList.add('active');
         } else if (mode === 'preview') {
+            // Preview Mode: Left hidden, Right takes full width
             left.classList.add('hidden');
             right.classList.add('flex-1');
             resizer.classList.add('hidden');
             $('viewPreview').classList.add('active');
         } else {
-            // Split (Default)
-            left.style.width = lastSplitWidth; 
-            left.style.flex = 'none';
+            // Split Mode: Left is fixed width, Right is flex-1
+            right.classList.add('flex-1');
+            left.style.width = lastSplitWidth || '500px'; 
+            left.style.flex = 'none'; // Prevent flex shrinking/growing
             $('viewSplit').classList.add('active');
         }
-        editorCM.refresh();
+        
+        // Force Refresh with delay to allow DOM paint
+        setTimeout(() => {
+            if(editorCM) editorCM.refresh();
+        }, 10);
     };
 
     window.downloadRawCode = () => {
