@@ -75,6 +75,11 @@
     .settings-tab { cursor: pointer; padding: 8px 12px; border-bottom: 2px solid transparent; color: #9ca3af; font-size: 0.8rem; font-weight: 500; }
     .settings-tab.active { border-bottom-color: #3b82f6; color: white; }
 
+    /* View Toggles */
+    .view-btn { padding: 2px 8px; font-size: 10px; border-radius: 4px; color: #9ca3af; transition: all 0.2s; }
+    .view-btn:hover { color: white; background: #374151; }
+    .view-btn.active { background: #374151; color: white; font-weight: bold; }
+
     /* Icon Picker Grid */
     .icon-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; max-height: 200px; overflow-y: auto; padding: 4px; }
     .icon-option { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 4px; background: #374151; color: #9ca3af; }
@@ -143,7 +148,7 @@
        </div>
   </div>
 
-  <!-- SAVE/PROPERTIES MODAL (New) -->
+  <!-- SAVE/PROPERTIES MODAL -->
   <div id="saveOptionsModal" class="hidden fixed inset-0 z-[10000] bg-black/80 flex items-center justify-center p-4">
       <div class="bg-gray-800 w-96 rounded-xl shadow-2xl border border-gray-700 flex flex-col overflow-hidden animate-popIn">
           <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-900/50">
@@ -184,7 +189,7 @@
       </div>
   </div>
 
-  <!-- ICON PICKER MODAL (Fixed Z-Index) -->
+  <!-- ICON PICKER MODAL -->
   <div id="iconPickerModal" class="hidden fixed inset-0 z-[10001] bg-black/60 flex items-center justify-center p-4">
       <div class="bg-gray-800 w-80 rounded-lg shadow-2xl border border-gray-700 flex flex-col">
           <div class="p-3 border-b border-gray-700 flex justify-between items-center">
@@ -211,18 +216,30 @@
               <span class="text-xs font-mono text-gray-400">Cloudstax Code Manager</span>
           </div>
           <div class="flex items-center gap-3">
+              <!-- View Mode Toggle -->
+              <div class="flex bg-gray-800 rounded p-0.5 border border-gray-700">
+                  <button id="viewSplit" onclick="setEditorLayout('split')" class="view-btn active" title="Split View">Split</button>
+                  <button id="viewCode" onclick="setEditorLayout('code')" class="view-btn" title="Code Only">Code</button>
+                  <button id="viewPreview" onclick="setEditorLayout('preview')" class="view-btn" title="Preview Only">Preview</button>
+              </div>
+              <div class="w-[1px] h-4 bg-gray-700"></div>
+              
+              <button id="downloadCodeBtn" class="text-gray-400 hover:text-blue-400 transition" title="Download Raw Code">
+                  <span class="material-symbols-outlined text-lg">download</span>
+              </button>
+              
               <button id="saveBtn" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded shadow-lg shadow-blue-900/20 font-medium tracking-wide active:scale-95 transition-transform">SAVE APP</button>
           </div>
       </header>
 
       <!-- Resizable Content -->
-      <div class="flex-1 flex overflow-hidden">
+      <div class="flex-1 flex overflow-hidden relative">
           <!-- Left Panel -->
-          <div id="editorLeft" class="w-[500px] flex flex-col bg-gray-900 border-r border-gray-800 relative shrink-0 min-w-[300px]">
+          <div id="editorLeft" class="w-[500px] flex flex-col bg-gray-900 border-r border-gray-800 relative shrink-0 min-w-[0px] transition-all duration-300">
               
               <!-- Editor Toolbar -->
               <div class="p-2 border-b border-gray-800 flex justify-between items-center bg-gray-800/30">
-                  <input id="inName" class="bg-transparent text-sm font-bold text-white outline-none w-1/3" placeholder="Untitled App" readonly title="Edit name in Save Menu">
+                  <input id="inName" class="bg-transparent text-sm font-bold text-white outline-none w-1/3 hover:bg-gray-800/50 rounded px-1 transition" placeholder="Untitled App">
                   
                   <!-- MISSING FEATURE 1: Local File Import & Clear -->
                   <div class="flex items-center gap-2">
@@ -249,13 +266,33 @@
               
               <!-- Hidden Datalist for Stacks -->
               <datalist id="dlStacks"></datalist>
+              
+              <!-- Metadata Footer -->
+              <div class="p-2 bg-gray-900 border-t border-gray-800 text-[10px] text-gray-500 flex gap-2 font-mono items-center">
+                  <span>Stack:</span>
+                  <input id="inStack" class="bg-transparent border-b border-gray-700 text-gray-300 w-16 outline-none focus:border-blue-500" list="dlStacks" placeholder="General">
+                  
+                  <span class="ml-2 border-l border-gray-700 pl-2">Icon:</span>
+                  <div class="flex-1 flex items-center relative z-20">
+                      <input id="inIcon" class="w-full bg-transparent border-b border-gray-700 text-blue-400 outline-none focus:border-blue-500 truncate pr-6" placeholder="URL / Emoji">
+                      <button id="btnOpenIconPicker" class="absolute right-0 text-gray-400 hover:text-white px-1 cursor-pointer">☺</button>
+                  </div>
+
+                  <label class="flex items-center gap-1 ml-2 cursor-pointer hover:text-white" title="Show on Desktop">
+                      <input id="chkDesk" type="checkbox" class="form-checkbox w-3 h-3"> Pin
+                  </label>
+                  
+                  <label class="flex items-center gap-1 ml-2 cursor-pointer hover:text-white">
+                      <input id="chkFav" type="checkbox" class="form-checkbox w-3 h-3"> Fav
+                  </label>
+              </div>
           </div>
 
           <!-- Resizer Handle -->
           <div id="mainResizer" class="resizer w-1 hover:w-2 bg-gray-800 hover:bg-blue-500 cursor-col-resize z-40 transition-all"></div>
 
           <!-- Right Panel (Preview) -->
-          <div id="editorRight" class="flex-1 bg-gray-950 flex flex-col min-w-[300px] relative">
+          <div id="editorRight" class="flex-1 bg-gray-950 flex flex-col min-w-[0px] relative transition-all duration-300">
                <div class="h-8 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-2">
                    <span class="text-[10px] font-mono text-gray-500 tracking-widest">LIVE PREVIEW</span>
                    <div class="flex gap-2">
@@ -654,6 +691,49 @@
         } else { frame.src = app.url || editorCM.getValue(); }
     }
     
+    // --- EDITOR LAYOUT & DOWNLOAD ---
+    window.setEditorLayout = (mode) => {
+        const left = $('editorLeft');
+        const right = $('editorRight');
+        const resizer = $('mainResizer');
+        
+        // Reset Logic
+        left.classList.remove('hidden', 'flex-1');
+        right.classList.remove('hidden', 'flex-1');
+        resizer.classList.remove('hidden');
+        
+        document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+        
+        if (mode === 'code') {
+            right.classList.add('hidden');
+            left.classList.add('flex-1');
+            resizer.classList.add('hidden');
+            $('viewCode').classList.add('active');
+        } else if (mode === 'preview') {
+            left.classList.add('hidden');
+            right.classList.add('flex-1');
+            resizer.classList.add('hidden');
+            $('viewPreview').classList.add('active');
+        } else {
+            // Split (Default)
+            left.style.width = '500px'; 
+            left.style.flex = 'none';
+            $('viewSplit').classList.add('active');
+        }
+        editorCM.refresh();
+    };
+
+    window.downloadRawCode = () => {
+        const code = editorCM.getValue();
+        const filename = ($('inName').value || 'app').replace(/[^a-z0-9_\-\s]/gi, '_') + '.html';
+        const blob = new Blob([code], {type: 'text/html'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    };
+
     // --- FINDER (DASHBOARD) ---
     function renderFinder() {
         const stacks = [...new Set(all.map(a => a.stack || 'General'))].sort();
@@ -724,9 +804,13 @@
     // --- MAIN INIT ---
     async function init() {
         try {
-            // 1. Setup Listeners FIRST (Critical Fix: Ensures buttons work even if DB fails)
-            $('saveBtn').onclick = () => { $('saveOptionsModal').classList.remove('hidden'); };
+            // 1. Setup Listeners FIRST
+            $('saveBtn').onclick = () => { 
+                $('saveName').value = $('inName').value; // SYNC HEADER NAME TO SAVE MODAL
+                $('saveOptionsModal').classList.remove('hidden'); 
+            };
             $('btnConfirmSave').onclick = saveCurrentApp;
+            $('downloadCodeBtn').onclick = downloadRawCode;
             $('createNewAppBtn').onclick = () => { WindowManager.toggleLauncher(); openEditor(); };
             $('refreshPreview').onclick = () => updatePreview({type: 'html', html: editorCM.getValue()});
             $('popOutPreview').onclick = () => { const w = window.open('','_blank'); w.document.write(editorCM.getValue()); w.document.close(); };
@@ -808,7 +892,7 @@
             initIconPicker();
             initContextMenu();
             
-            // 3. Load Data (Last priority)
+            // 3. Load Data
             await initDB();
             try { 
                 all = await dbOp('get'); 
@@ -833,6 +917,7 @@
     
     async function saveCurrentApp() {
         try {
+            notify('Saving...', false);
             if(!currentAppId) { notify("No App Selected", true); return; }
             const appName = $('saveName').value || $('inName').value || 'Untitled';
             const app = {
@@ -848,7 +933,7 @@
             };
             await dbOp('put', app);
             all = await dbOp('get'); 
-            $('inName').value = appName; // Sync header name
+            $('inName').value = appName; // Sync header name back
             $('saveOptionsModal').classList.add('hidden');
             notify('Saved Successfully');
             renderDesktopIcons();
