@@ -302,7 +302,7 @@
   </div>
 
   <!-- Notification -->
-  <div id="notification" class="hidden fixed top-6 right-6 px-4 py-3 rounded-lg shadow-xl text-sm font-medium z-[100] text-white animate-slideIn"></div>
+  <div id="notification" class="hidden fixed top-6 right-6 px-4 py-3 rounded-lg shadow-xl text-sm font-medium z-[100000] text-white animate-slideIn"></div>
 
   <!-- LOGIC -->
   <script>
@@ -317,7 +317,7 @@
     const $ = id => document.getElementById(id);
     const esc = s => String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const notify = (msg, isErr) => {
-        const n = $('notification'); n.textContent = msg; n.className = `fixed top-6 right-6 px-4 py-3 rounded-lg shadow-xl text-sm font-medium z-[100] text-white transition-all transform translate-y-0 opacity-100 ${isErr?'bg-red-600':'bg-blue-600'}`;
+        const n = $('notification'); n.textContent = msg; n.className = `fixed top-6 right-6 px-4 py-3 rounded-lg shadow-xl text-sm font-medium z-[100000] text-white transition-all transform translate-y-0 opacity-100 ${isErr?'bg-red-600':'bg-blue-600'}`;
         n.classList.remove('hidden'); setTimeout(()=>n.classList.add('hidden'), 3000);
     };
     
@@ -616,6 +616,7 @@
              const script = `<script>
                 window.onerror = function(msg, url, line) { window.parent.postMessage({type:'log', level:'error', message: msg}, '*'); };
                 console.log = function(...args) { window.parent.postMessage({type:'log', level:'info', message: args.join(' ')}, '*'); };
+                console.log("Console Connected");
              <\/script>`;
              const blob = new Blob([script + (app.html || editorCM.getValue())], {type: 'text/html'});
              frame.src = URL.createObjectURL(blob);
@@ -691,124 +692,140 @@
 
     // --- MAIN INIT ---
     async function init() {
-        await initDB();
-        try { 
-            all = await dbOp('get'); 
-            try{ sIcons=new Map(Object.entries(JSON.parse(localStorage.getItem('cs_icons'))||{})); }catch{ sIcons=new Map(); }
-        } catch { all = []; }
+        try {
+            // 1. Setup Listeners FIRST (Critical Fix: Ensures buttons work even if DB fails)
+            $('saveBtn').onclick = saveCurrentApp;
+            $('createNewAppBtn').onclick = () => { WindowManager.toggleLauncher(); openEditor(); };
+            $('refreshPreview').onclick = () => updatePreview({type: 'html', html: editorCM.getValue()});
+            $('popOutPreview').onclick = () => { const w = window.open('','_blank'); w.document.write(editorCM.getValue()); w.document.close(); };
+            $('toggleConsole').onclick = () => { $('editorConsole').classList.toggle('translate-y-full'); };
+            $('finderSearch').oninput = (e) => { const term = e.target.value.toLowerCase(); renderFinderFiles(all.filter(a => a.name.toLowerCase().includes(term))); };
+            $('libInj').onchange = (e) => { if(e.target.value) { editorCM.replaceRange(e.target.value + '\n', {line:0, ch:0}); e.target.value=''; } };
+            
+            $('editorFileImport').onchange = e => {
+                const f = e.target.files[0];
+                if(f){ const r=new FileReader(); r.onload=v=>{ editorCM.setValue(v.target.result); $('inName').value = f.name.replace(/\.[^/.]+$/, ""); }; r.readAsText(f); }
+            };
+            $('editorClearBtn').onclick = () => { if(confirm("Clear Code?")) editorCM.setValue(''); };
 
-        editorCM = CodeMirror($('editorContainer'), {
-            mode: "htmlmixed", theme: "dracula", lineNumbers: true, viewportMargin: Infinity,
-            value: "<!-- Select an app to edit -->"
-        });
-        editorCM.on('change', debounce(() => {
-            if(currentAppId) updatePreview({ type: 'html', html: editorCM.getValue() });
-        }, 1000));
+            $('btnExport').onclick = () => {
+                 const a = document.createElement('a');
+                 a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(all));
+                 a.download = 'Cloudstax_Backup.json';
+                 a.click();
+            };
+            $('btnImport').onclick = () => {
+                const f = $('fileImport').files[0];
+                if(f){
+                    const r = new FileReader();
+                    r.onload = async e => {
+                        try {
+                            const d = JSON.parse(e.target.result);
+                            for(const i of d) { if(!all.find(x=>x.id===i.id)) await dbOp('put', i); }
+                            all = await dbOp('get'); renderFinder(); notify("Import Successful");
+                        } catch { notify("Invalid JSON", true); }
+                    };
+                    r.readAsText(f);
+                }
+            };
+            $('btnTools').onclick = async () => {
+                 try {
+                    const r = await fetch('https://junkyardai.github.io/Cloudstax-Default-Tools/');
+                    const t = await r.text();
+                    const p = new DOMParser().parseFromString(t,'text/html');
+                    let count = 0;
+                    p.querySelectorAll('a').forEach(async a=>{
+                        if(a.href.startsWith('http')){
+                            await dbOp('put',{id:crypto.randomUUID(),name:a.innerText,url:a.href,stack:"Tools",iconUrl:'',createdAt:new Date().toISOString(),type:'link'});
+                            count++;
+                        }
+                    });
+                    setTimeout(async ()=>{ all = await dbOp('get'); notify(`Added ${count} tools`); renderDesktopIcons(); }, 1000);
+                } catch { notify("Fetch Error", true); }
+            };
+            $('btnSaveIcons').onclick = () => {
+                document.querySelectorAll('.stack-icon-input').forEach(s => sIcons.set(s.dataset.stack, s.value));
+                localStorage.setItem('cs_icons', JSON.stringify(Object.fromEntries(sIcons)));
+                notify("Icons Saved"); renderFinder();
+            };
+            
+            // Console Listener
+            window.addEventListener('message', e => {
+                if(e.data?.type === 'log') {
+                    const ln = document.createElement('div');
+                    ln.className = e.data.level==='error'?'text-red-400 border-l-2 border-red-500 pl-1':'text-gray-400';
+                    ln.textContent = `> ${e.data.message}`;
+                    $('editorConsole').prepend(ln);
+                }
+            });
+            
+            // Desktop Right Click
+            $('desktop').oncontextmenu = (e) => { e.preventDefault(); $('contextMenu').classList.add('hidden'); };
 
-        setupResizer();
-        initBackground();
-        renderDesktopIcons();
-        initIconPicker();
-        initContextMenu();
-        
-        // MISSING FEATURE 4: CLOCK
-        setInterval(() => {
-            const d = new Date();
-            $('sys-clock').textContent = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        }, 1000);
+            // 2. Initialize Components
+            editorCM = CodeMirror($('editorContainer'), {
+                mode: "htmlmixed", theme: "dracula", lineNumbers: true, viewportMargin: Infinity,
+                value: "<!-- Select an app to edit -->"
+            });
+            editorCM.on('change', debounce(() => {
+                if(currentAppId) updatePreview({ type: 'html', html: editorCM.getValue() });
+            }, 1000));
 
-        $('saveBtn').onclick = saveCurrentApp;
-        $('createNewAppBtn').onclick = () => { WindowManager.toggleLauncher(); openEditor(); };
-        $('refreshPreview').onclick = () => updatePreview({type: 'html', html: editorCM.getValue()});
-        $('popOutPreview').onclick = () => { const w = window.open('','_blank'); w.document.write(editorCM.getValue()); w.document.close(); };
-        $('toggleConsole').onclick = () => { $('editorConsole').classList.toggle('translate-y-full'); };
-        $('finderSearch').oninput = (e) => { const term = e.target.value.toLowerCase(); renderFinderFiles(all.filter(a => a.name.toLowerCase().includes(term))); };
-        $('libInj').onchange = (e) => { if(e.target.value) { editorCM.replaceRange(e.target.value + '\n', {line:0, ch:0}); e.target.value=''; } };
-        
-        // MISSING FEATURE 1 & 2: Local File Import & Clear
-        $('editorFileImport').onchange = e => {
-            const f = e.target.files[0];
-            if(f){ const r=new FileReader(); r.onload=v=>{ editorCM.setValue(v.target.result); $('inName').value = f.name.replace(/\.[^/.]+$/, ""); }; r.readAsText(f); }
-        };
-        $('editorClearBtn').onclick = () => { if(confirm("Clear Code?")) editorCM.setValue(''); };
+            setupResizer();
+            initBackground();
+            initIconPicker();
+            initContextMenu();
+            
+            // 3. Load Data (Last priority)
+            await initDB();
+            try { 
+                all = await dbOp('get'); 
+                try{ sIcons=new Map(Object.entries(JSON.parse(localStorage.getItem('cs_icons'))||{})); }catch{ sIcons=new Map(); }
+            } catch { all = []; }
+            
+            renderDesktopIcons();
+            
+            // Clock
+            setInterval(() => {
+                const d = new Date();
+                $('sys-clock').textContent = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            }, 1000);
+            
+            console.log("System Ready");
 
-        $('btnExport').onclick = () => {
-             const a = document.createElement('a');
-             a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(all));
-             a.download = 'Cloudstax_Backup.json';
-             a.click();
-        };
-        $('btnImport').onclick = () => {
-            const f = $('fileImport').files[0];
-            if(f){
-                const r = new FileReader();
-                r.onload = async e => {
-                    try {
-                        const d = JSON.parse(e.target.result);
-                        for(const i of d) { if(!all.find(x=>x.id===i.id)) await dbOp('put', i); }
-                        all = await dbOp('get'); renderFinder(); notify("Import Successful");
-                    } catch { notify("Invalid JSON", true); }
-                };
-                r.readAsText(f);
-            }
-        };
-        $('btnTools').onclick = async () => {
-             try {
-                const r = await fetch('https://junkyardai.github.io/Cloudstax-Default-Tools/');
-                const t = await r.text();
-                const p = new DOMParser().parseFromString(t,'text/html');
-                let count = 0;
-                p.querySelectorAll('a').forEach(async a=>{
-                    if(a.href.startsWith('http')){
-                        await dbOp('put',{id:crypto.randomUUID(),name:a.innerText,url:a.href,stack:"Tools",iconUrl:'',createdAt:new Date().toISOString(),type:'link'});
-                        count++;
-                    }
-                });
-                setTimeout(async ()=>{ all = await dbOp('get'); notify(`Added ${count} tools`); renderDesktopIcons(); }, 1000);
-            } catch { notify("Fetch Error", true); }
-        };
-        $('btnSaveIcons').onclick = () => {
-            document.querySelectorAll('.stack-icon-input').forEach(s => sIcons.set(s.dataset.stack, s.value));
-            localStorage.setItem('cs_icons', JSON.stringify(Object.fromEntries(sIcons)));
-            notify("Icons Saved"); renderFinder();
-        };
-        
-        window.addEventListener('message', e => {
-            if(e.data?.type === 'log') {
-                const ln = document.createElement('div');
-                ln.className = e.data.level==='error'?'text-red-400 border-l-2 border-red-500 pl-1':'text-gray-400';
-                ln.textContent = `> ${e.data.message}`;
-                $('editorConsole').prepend(ln);
-            }
-        });
-        
-        // Desktop Right Click
-        $('desktop').oncontextmenu = (e) => { e.preventDefault(); $('contextMenu').classList.add('hidden'); };
+        } catch (e) {
+            console.error(e);
+            notify("System Init Error: " + e.message, true);
+        }
     }
     
     async function saveCurrentApp() {
-        if(!currentAppId) return;
-        const app = {
-            id: currentAppId,
-            name: $('inName').value || 'Untitled',
-            stack: $('inStack').value || 'General',
-            iconUrl: $('inIcon').value,
-            isFavorite: $('chkFav').checked,
-            onDesktop: $('chkDesk').checked,
-            type: 'html',
-            html: editorCM.getValue(),
-            createdAt: new Date().toISOString()
-        };
-        await dbOp('put', app);
-        all = await dbOp('get'); 
-        notify('Saved Successfully');
-        renderDesktopIcons();
-        renderFinder();
-        
-        // Refresh Dock if it exists
-        WindowManager.removeFromDock(app.id);
-        const win = WindowManager.windows.get(app.id);
-        if(win) WindowManager.addToDock(app);
+        try {
+            if(!currentAppId) { notify("No App Selected", true); return; }
+            const app = {
+                id: currentAppId,
+                name: $('inName').value || 'Untitled',
+                stack: $('inStack').value || 'General',
+                iconUrl: $('inIcon').value,
+                isFavorite: $('chkFav').checked,
+                onDesktop: $('chkDesk').checked,
+                type: 'html',
+                html: editorCM.getValue(),
+                createdAt: new Date().toISOString()
+            };
+            await dbOp('put', app);
+            all = await dbOp('get'); 
+            notify('Saved Successfully');
+            renderDesktopIcons();
+            renderFinder();
+            
+            // Refresh Dock if it exists
+            WindowManager.removeFromDock(app.id);
+            const win = WindowManager.windows.get(app.id);
+            if(win) WindowManager.addToDock(app);
+        } catch(e) {
+            notify("Save Failed: " + e.message, true);
+        }
     }
 
     function renderDesktopIcons() {
