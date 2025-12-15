@@ -2,318 +2,647 @@
 <html lang="en" class="h-full">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cloudstax - Code Manager</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Cloudstax OS</title>
   <!-- Dependencies -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display.swap" rel="stylesheet">
+  
+  <!-- CodeMirror (Editor) Dependencies -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/dracula.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/xml/xml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/css/css.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/htmlmixed/htmlmixed.min.js"></script>
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display.swap" rel="stylesheet">
   <style>
-    body { font-family: 'Inter', sans-serif; overflow: hidden; }
+    body { font-family: 'Inter', sans-serif; overflow: hidden; background-color: #000; }
+    
     /* UI Utils */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
-    ::-webkit-scrollbar-track { background: #111827; }
-    .glass { background: rgba(17, 24, 39, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(75, 85, 99, 0.4); }
+    ::-webkit-scrollbar-track { background: transparent; }
+    .glass { background: rgba(17, 24, 39, 0.7); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37); }
+    .glass-panel { background: rgba(30, 41, 59, 0.6); backdrop-filter: blur(12px); border-right: 1px solid rgba(255, 255, 255, 0.05); }
+    
+    /* Forms */
     .form-checkbox { appearance: none; background: #374151; border: 1px solid #4b5563; display: inline-block; vertical-align: middle; height: 1.1rem; width: 1.1rem; border-radius: 0.25rem; flex-shrink: 0; }
     .form-checkbox:checked { background-color: #3b82f6; border-color: #3b82f6; background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 0 1 0 1.414l-5 5a1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L6.5 9.086l4.293-4.293a1 1 0 0 1 1.414 0z'/%3e%3c/svg%3e"); background-size: 100% 100%; background-position: center; background-repeat: no-repeat; }
-    .active-tab { color: #60a5fa; border-bottom: 2px solid #60a5fa; background: rgba(59, 130, 246, 0.1); }
-    .dragging { opacity: 0.5; background: #374151 !important; border: 1px dashed #60a5fa !important; }
-    .drag-over { border-top: 2px solid #3b82f6 !important; }
-    #logo-canvas { display: block; }
-    /* Standby Overlay */
-    #standbyOverlay { background: radial-gradient(circle at center, #1f2937 0%, #030712 100%); }
-    /* Stack Creator */
-    #stackCreatorList li { display: flex; justify-content: space-between; padding: 6px; border-bottom: 1px solid #374151; font-size: 0.8rem; color: #d1d5db; }
-    #stackCreatorList li:last-child { border-bottom: none; }
-    .creator-actions button { margin-left: 4px; padding: 2px 6px; background: #4b5563; border-radius: 4px; font-size: 0.7rem; }
+    
+    /* CodeMirror */
+    .CodeMirror { height: 100%; font-family: 'JetBrains Mono', monospace; font-size: 13px; background: transparent !important; }
+    .cm-s-dracula.CodeMirror { background: rgba(17, 24, 39, 0.5) !important; }
+
+    /* Window System */
+    .os-window { position: absolute; display: flex; flex-direction: column; background: #111827; border: 1px solid #374151; border-radius: 12px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); transition: transform 0.1s, opacity 0.2s; animation: popIn 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+    .os-window.minimized { opacity: 0; pointer-events: none; transform: scale(0.9) translateY(20px); }
+    .window-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #1f2937; border-bottom: 1px solid #374151; user-select: none; cursor: grab; }
+    .window-header:active { cursor: grabbing; }
+    .window-content { flex: 1; position: relative; overflow: hidden; background: #000; }
+    .window-iframe { width: 100%; height: 100%; border: none; background: #fff; }
+    
+    /* Desktop Icons */
+    .desktop-icon { width: 80px; display: flex; flex-direction: column; align-items: center; padding: 8px; border-radius: 8px; cursor: pointer; transition: background 0.2s; color: white; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+    .desktop-icon:hover { background: rgba(255, 255, 255, 0.1); }
+    .desktop-icon-img { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 4px; background: linear-gradient(135deg, #3b82f6, #1d4ed8); box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    .folder-icon-img { background: linear-gradient(135deg, #fbbf24, #d97706); }
+    
+    /* Resizer */
+    .resizer { width: 4px; background: #1f2937; cursor: col-resize; transition: background 0.2s; z-index: 50; }
+    .resizer:hover, .resizer.resizing { background: #3b82f6; }
+
+    /* Animations */
+    @keyframes popIn { 0% { opacity: 0; transform: scale(0.95); } 100% { opacity: 1; transform: scale(1); } }
+    
+    /* Untitled.stream visual style for lists */
+    .mono-list-item { font-family: 'JetBrains Mono', monospace; border-left: 1px solid #374151; padding-left: 12px; position: relative; }
+    .mono-list-item::before { content: ''; position: absolute; left: 0; top: 50%; width: 0; height: 0; border: 1px solid transparent; transition: all 0.2s; }
+    .mono-list-item:hover { border-left-color: #60a5fa; color: #fff; background: linear-gradient(90deg, rgba(59,130,246,0.1), transparent); }
   </style>
 </head>
-<body class="h-full bg-gray-950 text-gray-100 flex overflow-hidden">
+<body class="h-full bg-black text-gray-100 overflow-hidden select-none">
 
-  <!-- LAYOUT -->
-  <div id="appLayout" class="flex w-full h-full relative z-10">
-    
-    <!-- LEFT PANEL: Code Manager -->
-    <div id="leftPanel" class="w-full lg:w-[500px] xl:w-[550px] flex flex-col h-full border-r border-gray-800 bg-gray-900 z-20 shadow-2xl relative">
-      <!-- Header -->
-      <header class="flex items-center gap-3 p-4 border-b border-gray-800 select-none bg-gray-900">
-        <canvas id="logo-canvas" class="w-10 h-10 rounded-lg"></canvas>
-        <div class="flex-1"><h1 class="text-base font-bold text-white">Cloudstax</h1><p class="text-xs text-gray-400">Code Manager</p></div>
-        <button id="standbyBtn" class="p-2 text-gray-400 hover:text-blue-400 transition" title="Standby Mode">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
-        </button>
+  <!-- WALLPAPER / DESKTOP -->
+  <div id="desktop" class="absolute inset-0 z-0 overflow-hidden">
+      <!-- ThreeJS Background Canvas -->
+      <canvas id="bg-canvas" class="absolute inset-0 w-full h-full opacity-40"></canvas>
+      
+      <!-- Desktop Grid -->
+      <div id="desktop-grid" class="absolute inset-0 p-6 grid grid-cols-[repeat(auto-fill,80px)] grid-rows-[repeat(auto-fill,100px)] gap-4 content-start z-10 pointer-events-none">
+          <!-- Icons injected by JS -->
+      </div>
+  </div>
+
+  <!-- WINDOWS CONTAINER -->
+  <div id="windows-area" class="absolute inset-0 z-20 pointer-events-none">
+     <!-- Windows injected here -->
+  </div>
+
+  <!-- EDITOR APP (Full Screen Mode) -->
+  <div id="editor-app" class="os-window hidden w-full h-full rounded-none border-none z-30 bg-gray-900 flex flex-col">
+      <!-- Mac-style Traffic Lights Header -->
+      <header class="h-10 flex items-center justify-between px-4 bg-gray-900 border-b border-gray-800 shrink-0">
+          <div class="flex items-center gap-4">
+              <div class="flex gap-2 group">
+                  <button onclick="closeApp('editor')" class="w-3 h-3 rounded-full bg-red-500 hover:bg-red-600 transition flex items-center justify-center text-[8px] text-black opacity-80 group-hover:opacity-100">✕</button>
+                  <button class="w-3 h-3 rounded-full bg-yellow-500 hover:bg-yellow-600 transition"></button>
+                  <button onclick="toggleFullScreen('editor-app')" class="w-3 h-3 rounded-full bg-green-500 hover:bg-green-600 transition"></button>
+              </div>
+              <span class="text-xs font-mono text-gray-400">Cloudstax Code Manager</span>
+          </div>
+          <div class="flex items-center gap-3">
+              <button id="saveBtn" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded">Save</button>
+          </div>
       </header>
-      
-      <!-- App Creator Input -->
-      <div class="p-4 border-b border-gray-800 bg-gray-800/30">
-        <div class="space-y-3">
-            <div class="flex justify-between items-center text-xs text-gray-500 font-mono">
-                <span class="flex items-center gap-2">SOURCE: <input type="file" id="inFile" class="text-gray-400 file:bg-gray-800 file:text-blue-400 file:border-0 file:text-xs file:mr-2 file:cursor-pointer file:px-2 file:rounded"></span>
-                <button id="clearCode" class="text-xs text-red-400 hover:text-red-300">CLEAR</button>
-            </div>
-            
-            <textarea id="inCode" placeholder="<!-- Paste your HTML/CSS/JS App code here -->" class="w-full h-32 bg-gray-900 rounded p-3 font-mono text-xs border border-gray-700 outline-none resize-none focus:border-blue-500 text-gray-300"></textarea>
-            
-            <div class="flex gap-2">
-                <input id="inName" placeholder="App Name" class="w-1/3 text-sm bg-gray-900 rounded px-3 py-2 border border-gray-700 focus:border-blue-500 outline-none text-white">
-                <input id="inStack" placeholder="Stack" list="dlStacks" class="flex-1 text-sm bg-gray-900 rounded px-3 py-2 border border-gray-700 outline-none text-white">
-                <datalist id="dlStacks"></datalist>
-                <button id="btnAdd" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium text-white shadow-lg shadow-blue-900/20 whitespace-nowrap">+ Create App</button>
-            </div>
-            
-            <div class="flex justify-end gap-4 text-xs text-gray-400">
-                <label class="flex items-center cursor-pointer hover:text-white"><input id="chkFav" type="checkbox" class="form-checkbox mr-2"> Add to Favorites</label>
-            </div>
-        </div>
-      </div>
-      
-      <!-- List Controls -->
-      <div class="flex gap-2 p-3 bg-gray-900 border-b border-gray-800">
-        <input id="inSearch" placeholder="Search apps..." class="flex-1 text-sm bg-gray-800 rounded px-3 py-1.5 border border-gray-700 outline-none focus:border-blue-500 text-white">
-        <select id="selFilter" class="text-sm bg-gray-800 text-gray-300 rounded px-2 py-1.5 border border-gray-700 outline-none w-32"><option value="">All Stacks</option></select>
-      </div>
 
-      <!-- List -->
-      <div id="bookmarksView" class="flex-1 overflow-y-auto p-2 bg-gray-900 space-y-2">
-        <div id="listContainer" class="space-y-2 pb-10"></div>
-      </div>
+      <!-- Resizable Content -->
+      <div class="flex-1 flex overflow-hidden">
+          <!-- Left Panel -->
+          <div id="editorLeft" class="w-[500px] flex flex-col bg-gray-900 border-r border-gray-800 relative shrink-0 min-w-[300px]">
+              
+              <!-- Editor Toolbar -->
+              <div class="p-2 border-b border-gray-800 flex justify-between items-center bg-gray-800/30">
+                  <input id="inName" class="bg-transparent text-sm font-bold text-white outline-none w-1/2" placeholder="Untitled App">
+                  <div class="flex gap-2">
+                    <select id="libInj" class="bg-gray-800 text-[10px] text-gray-400 border border-gray-700 rounded px-1 outline-none">
+                        <option value="">+ Lib</option>
+                        <option value='<script src="https://cdn.tailwindcss.com"></script>'>Tailwind</option>
+                        <option value='<script src="https://unpkg.com/react@18/umd/react.development.js"></script><script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>'>React</option>
+                        <option value='<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>'>ThreeJS</option>
+                    </select>
+                  </div>
+              </div>
 
-      <!-- Pagination -->
-      <div id="pager" class="hidden p-2 justify-center bg-gray-900 border-t border-gray-800 gap-2"></div>
-      
-      <!-- Footer -->
-      <div class="p-3 bg-gray-900 border-t border-gray-800 flex justify-between items-center text-xs relative">
-         <button id="btnSettings" class="flex items-center gap-2 text-gray-400 hover:text-white px-3 py-1.5 rounded hover:bg-gray-800">⚙️ Settings <span id="badgeErr" class="hidden bg-red-500 text-white px-1 rounded-full text-[10px]">0</span></button>
-         <button id="btnReorder" class="p-1.5 text-gray-400 hover:text-white rounded hover:bg-gray-800" title="Reorder (All Stacks)">⇅</button>
-      </div>
-      
-      <!-- Multi Select Footer -->
-      <div id="multiSelectFooter" class="absolute bottom-12 left-4 right-4 bg-blue-600 rounded-lg p-3 shadow-xl hidden flex justify-between items-center z-30">
-         <span id="selectedCount" class="text-white text-sm font-medium">0 selected</span>
-         <button id="launchSelectedBtn" class="bg-white text-blue-600 px-3 py-1 rounded text-xs font-bold uppercase tracking-wider hover:bg-gray-100">Launch</button>
-      </div>
-    </div>
+              <!-- CodeMirror -->
+              <div id="editorContainer" class="flex-1 relative text-sm"></div>
 
-    <!-- RIGHT PANEL: Dashboard (Preview Only) -->
-    <div id="rightPanel" class="hidden lg:flex flex-1 flex-col bg-gray-950 relative overflow-hidden">
-        
-        <!-- Preview Console Header -->
-        <div class="flex justify-between items-center p-2 border-b border-gray-800 bg-gray-900/95 backdrop-blur z-20">
-            <span class="text-xs text-gray-500 pl-2 font-mono tracking-widest">APP PREVIEW CONSOLE</span>
-            <div class="flex gap-2">
-                <button id="reloadPreviewBtn" class="text-xs bg-gray-800 hover:text-white text-gray-400 px-2 py-1 rounded border border-gray-700">⟳ Reload</button>
-                <button id="popOutBtn" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">↗ Pop Out</button>
-                <button id="clearPreviewBtn" class="text-xs bg-red-900/30 hover:bg-red-900/50 text-red-400 px-2 py-1 rounded border border-red-900/50">✕ Clear</button>
-            </div>
-        </div>
+              <!-- Metadata Footer -->
+              <div class="p-2 bg-gray-900 border-t border-gray-800 text-[10px] text-gray-500 flex gap-2 font-mono">
+                  <span>Stack:</span>
+                  <input id="inStack" class="bg-transparent border-b border-gray-700 text-gray-300 w-20 outline-none" list="dlStacks" placeholder="General">
+                  <datalist id="dlStacks"></datalist>
+                  <label class="flex items-center gap-1 ml-auto cursor-pointer hover:text-white"><input id="chkFav" type="checkbox" class="form-checkbox w-3 h-3"> Fav</label>
+              </div>
+          </div>
 
-        <!-- Preview Area -->
-        <div id="tab-preview" class="flex-1 relative flex-col bg-gray-900 h-full flex">
-            <div id="previewPlaceholder" class="flex-1 flex flex-col items-center justify-center text-gray-600">
-                <div class="w-16 h-16 border-2 border-gray-700 rounded-lg flex items-center justify-center mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                </div>
-                <p class="text-sm">Select an app to execute</p>
-            </div>
-            <iframe id="previewFrame" class="flex-1 w-full border-none hidden bg-white"></iframe>
-        </div>
-    </div>
-  </div>
+          <!-- Resizer Handle -->
+          <div id="mainResizer" class="resizer w-1 hover:w-2 bg-gray-800 hover:bg-blue-500 cursor-col-resize z-40 transition-all"></div>
 
-  <!-- Mobile Overlay for Preview -->
-  <div id="previewContainer" class="hidden fixed inset-0 bg-gray-900 z-50 flex-col">
-      <div class="flex justify-between items-center p-3 bg-gray-800 border-b border-gray-700">
-          <span class="text-sm font-medium text-white pl-2">Mobile Preview</span>
-          <button id="closePreviewBtn" class="text-gray-400 hover:text-white px-3 py-1 bg-gray-700 rounded text-xs">Close</button>
-      </div>
-      <iframe id="mobilePreviewFrame" class="flex-1 w-full border-none bg-white"></iframe>
-  </div>
-
-  <!-- STANDBY MODE OVERLAY -->
-  <div id="standbyOverlay" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-gray-950 text-white">
-      <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/30 via-gray-950 to-gray-950 pointer-events-none"></div>
-      <div class="absolute top-8 right-8 z-50">
-          <button id="exitStandbyBtn" class="flex items-center gap-2 px-4 py-2 bg-gray-800/50 hover:bg-gray-700 rounded-full border border-gray-700 transition text-sm text-gray-300 backdrop-blur-sm">Exit</button>
-      </div>
-      <div class="relative z-10 flex flex-col items-center">
-          <canvas id="standby-logo-canvas" class="w-64 h-64 mb-6"></canvas>
-          <h1 class="text-4xl font-bold tracking-tight">Cloudstax</h1>
-          <p class="text-blue-500 text-sm font-medium tracking-[0.2em] mt-2 uppercase">System Standby</p>
-          <div class="mt-16 w-80">
-              <div class="text-center mb-4 text-xs text-gray-600 font-mono uppercase">Recent Launches</div>
-              <div id="recentLinksList" class="space-y-2"></div>
+          <!-- Right Panel (Preview) -->
+          <div id="editorRight" class="flex-1 bg-gray-950 flex flex-col min-w-[300px] relative">
+               <div class="h-8 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-2">
+                   <span class="text-[10px] font-mono text-gray-500">LIVE PREVIEW</span>
+                   <div class="flex gap-2">
+                       <button id="refreshPreview" class="text-gray-400 hover:text-white text-xs">⟳</button>
+                       <button id="popOutPreview" class="text-gray-400 hover:text-white text-xs">↗</button>
+                   </div>
+               </div>
+               <iframe id="editorPreviewFrame" class="flex-1 w-full border-none bg-white" sandbox="allow-scripts allow-modals allow-same-origin allow-forms"></iframe>
+               <!-- Console Overlay -->
+               <div id="editorConsole" class="absolute bottom-0 left-0 right-0 h-32 bg-gray-900/95 border-t border-gray-800 transform translate-y-full transition-transform duration-300 font-mono text-[10px] p-2 overflow-y-auto text-gray-300"></div>
+               <button id="toggleConsole" class="absolute bottom-2 right-2 text-[10px] bg-gray-800 text-gray-400 px-2 py-1 rounded border border-gray-700 hover:text-white z-10">Console</button>
           </div>
       </div>
   </div>
 
-  <!-- Generic Modal -->
-  <div id="modal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-[200] p-4">
-    <div class="bg-gray-900 rounded-xl w-full max-w-lg border border-gray-700 shadow-2xl">
-      <div class="p-4 border-b border-gray-800 flex justify-between"><h2 id="modalTitle" class="font-bold"></h2><button id="modalClose">✕</button></div>
-      <div id="modalBody" class="p-6 overflow-y-auto max-h-[60vh] text-sm text-gray-300"></div>
-      <div id="modalFooter" class="p-4 border-t border-gray-800 flex justify-end gap-2"></div>
-    </div>
+  <!-- TASKBAR / DOCK -->
+  <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 glass px-4 py-2 rounded-2xl flex items-center gap-4 shadow-2xl transition-all hover:scale-105">
+      <button onclick="WindowManager.toggleLauncher()" class="p-2 rounded-xl hover:bg-white/10 transition tooltip-trigger" title="App Launcher">
+        <div class="w-8 h-8 bg-gray-200 rounded-lg grid grid-cols-2 gap-0.5 p-1.5 overflow-hidden">
+            <div class="bg-gray-800 rounded-sm"></div><div class="bg-gray-800 rounded-sm"></div>
+            <div class="bg-gray-800 rounded-sm"></div><div class="bg-blue-500 rounded-sm"></div>
+        </div>
+      </button>
+      <div class="w-[1px] h-8 bg-gray-700 mx-1"></div>
+      <div id="dock-apps" class="flex gap-3"></div>
   </div>
-  
+
+  <!-- APP LAUNCHER / FINDER (The "Untitled.stream" style viewer) -->
+  <div id="appLauncher" class="hidden absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] glass rounded-xl shadow-2xl z-40 flex flex-col overflow-hidden animate-popIn">
+      <div class="h-10 border-b border-gray-700 flex items-center px-4 justify-between bg-gray-900/50">
+          <div class="flex gap-2">
+             <div class="w-3 h-3 rounded-full bg-red-500/50"></div>
+             <div class="w-3 h-3 rounded-full bg-yellow-500/50"></div>
+             <div class="w-3 h-3 rounded-full bg-green-500/50"></div>
+          </div>
+          <input id="finderSearch" placeholder="Search Files..." class="bg-transparent text-center text-sm text-gray-300 outline-none w-1/3 placeholder-gray-600 font-mono">
+          <div class="w-10"></div>
+      </div>
+      <div class="flex-1 flex">
+          <!-- Sidebar (Stacks) -->
+          <div class="w-48 border-r border-gray-700/50 bg-gray-900/30 flex flex-col p-2 space-y-1 overflow-y-auto" id="finderSidebar">
+              <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-2 mb-2 mt-2">Stacks</div>
+              <!-- Stacks injected here -->
+          </div>
+          <!-- Main View (Files) -->
+          <div class="flex-1 bg-black/40 p-4 overflow-y-auto" id="finderMain">
+              <!-- Files injected here -->
+          </div>
+      </div>
+      <div class="h-8 border-t border-gray-700/50 bg-gray-900/50 flex items-center px-4 text-[10px] text-gray-500 font-mono justify-between">
+          <span id="finderStatus">0 items</span>
+          <button id="createNewAppBtn" class="text-blue-400 hover:text-white">+ New App</button>
+      </div>
+  </div>
+
   <!-- Notification -->
-  <div id="notification" class="hidden fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-xl text-sm font-medium z-[300] text-white"></div>
+  <div id="notification" class="hidden fixed top-6 right-6 px-4 py-3 rounded-lg shadow-xl text-sm font-medium z-[100] text-white animate-slideIn"></div>
 
   <!-- LOGIC -->
   <script>
-    const DB_N='cloudstax_db', DB_V=1, ST='bookmarks';
-    const ICONS=["","🚀","🛠️","✨","💡","📚","💼","🎵","🎮","🎨","📰","🛒","☁️","💰","🏠","❤️","⭐","🔗","📁","⚙️","📈"];
-    let db, all=[], sel=new Set(), errs=[], reorder=false, page=1, dSrc=null, recent=[], sIcons=new Map(), isCompact=false, curPreview=null;
-    const $=i=>document.getElementById(i);
-
-    // HELPERS
-    window.logError=(e,c)=>{ console.error(c,e); errs.push({t:new Date().toLocaleString(),m:e.message,c}); if($('badgeErr')){$('badgeErr').textContent=errs.length;$('badgeErr').classList.remove('hidden');} };
-    window.notify=(m,err)=>{ const t=$('notification'); t.textContent=m; t.className=`fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-xl text-sm font-medium z-[300] text-white ${err?'bg-red-600':'bg-blue-600'}`; t.classList.remove('hidden'); setTimeout(()=>t.classList.add('hidden'),3000); };
-    window.debounce=(f,d)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>f.apply(this,a),d); }; };
-    window.showModal=(t,b,f)=>{ $('modalTitle').textContent=t; $('modalBody').innerHTML=b; $('modalFooter').innerHTML=f||''; $('modal').classList.remove('hidden'); };
-    window.hideModal=()=>{ $('modal').classList.add('hidden'); $('modalBody').innerHTML=''; };
+    // --- CORE CONSTANTS & STATE ---
+    const DB_N='cloudstax_v2', DB_V=1, ST='apps';
+    let db, all=[], editorCM=null, currentAppId=null;
     
-    const sanitize=s=>{const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;};
-    const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    const normUrl=s=>{s=(s||'').trim(); if(!s)throw new Error('Empty'); if(/^(about|chrome|file|data):/.test(s))return s; return /^https?:\/\//i.test(s)?s:'https://'+s;};
-    const getFav=u=>u.startsWith('data:')||u==='app:local'?'':`https://www.google.com/s2/favicons?domain=${new URL(u).hostname}&sz=64`;
+    // --- UTILS ---
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const notify = (msg, isErr) => {
+        const n = $('notification'); n.textContent = msg; n.className = `fixed top-6 right-6 px-4 py-3 rounded-lg shadow-xl text-sm font-medium z-[100] text-white transition-all transform translate-y-0 opacity-100 ${isErr?'bg-red-600':'bg-blue-600'}`;
+        n.classList.remove('hidden'); setTimeout(()=>n.classList.add('hidden'), 3000);
+    };
 
-    // DB
-    async function initDB(){return new Promise((r,j)=>{const q=indexedDB.open(DB_N,DB_V);q.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains(ST)){d.createObjectStore(ST,{keyPath:'id'}).createIndex('idx','idx',{unique:false});}};q.onsuccess=e=>{db=e.target.result;r(db);};q.onerror=j;});}
-    async function dbOp(op,val){return new Promise((r,j)=>{const tx=db.transaction([ST],'readwrite'),s=tx.objectStore(ST),q=op==='get'?s.getAll():op==='add'?s.add(val):op==='put'?s.put(val):s.delete(val);q.onsuccess=e=>r(e.target.result);q.onerror=j;});}
-    async function loadData(){try{all=await dbOp('get');all.sort((a,b)=>(a.idx||0)-(b.idx||0));refresh();}catch(e){logError(e,'Load');}}
+    // --- DB LAYER ---
+    async function initDB(){return new Promise((r,j)=>{const q=indexedDB.open(DB_N,DB_V);q.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains(ST)){d.createObjectStore(ST,{keyPath:'id'});}};q.onsuccess=e=>{db=e.target.result;r(db);};q.onerror=j;});}
+    async function dbOp(op,val){return new Promise((r,j)=>{const tx=db.transaction([ST],'readwrite'),s=tx.objectStore(ST),q=op==='get'?s.getAll():op==='put'?s.put(val):s.delete(val);q.onsuccess=e=>r(e.target.result);q.onerror=j;});}
 
-    // UI
-    function loadSettings(){
-        try{sIcons=new Map(Object.entries(JSON.parse(localStorage.getItem('cs_icons'))||{}));}catch{sIcons=new Map();}
-        isCompact=localStorage.getItem('cs_view')==='true';
-        recent=JSON.parse(localStorage.getItem('cs_recent')||'[]');
-    }
+    // --- WINDOW MANAGER ---
+    const WindowManager = {
+        zIndex: 100,
+        windows: new Map(), // id -> element
+        
+        openApp: function(app) {
+            // Check if already open
+            if(this.windows.has(app.id)) {
+                this.focusWindow(app.id);
+                return;
+            }
 
-    // INIT
-    async function init(){
-        try {
-            if($('modalClose')) $('modalClose').onclick=hideModal;
-            await initDB(); loadSettings(); initConsole(); await loadData(); initThreeJS('logo-canvas',0.6);
+            // Create Window Element
+            const win = document.createElement('div');
+            win.className = 'os-window pointer-events-auto flex flex-col';
+            win.style.width = '400px'; 
+            win.style.height = '600px';
+            win.style.left = (100 + (this.windows.size * 30)) + 'px';
+            win.style.top = (50 + (this.windows.size * 30)) + 'px';
+            win.style.zIndex = ++this.zIndex;
+            win.dataset.id = app.id;
+
+            // Header
+            const header = document.createElement('div');
+            header.className = 'window-header';
+            header.innerHTML = `
+                <div class="flex gap-2">
+                    <button class="w-3 h-3 rounded-full bg-red-500 hover:bg-red-600 text-[8px] flex items-center justify-center text-black opacity-60 hover:opacity-100" onclick="WindowManager.closeWindow('${app.id}')">✕</button>
+                    <button class="w-3 h-3 rounded-full bg-yellow-500"></button>
+                    <button class="w-3 h-3 rounded-full bg-green-500" onclick="WindowManager.maximize('${app.id}')"></button>
+                </div>
+                <div class="text-xs font-medium text-gray-300 truncate max-w-[200px]">${esc(app.name)}</div>
+                <div class="w-10"></div>
+            `;
             
-            // Add Handler
-            $('btnAdd').onclick=async()=>{
-                const n=$('inName').value, st=$('inStack').value||"General", f=$('chkFav').checked;
-                const c=$('inCode').value;
-                if(!c) return notify("Code required", true);
-                
-                let b = { id: crypto.randomUUID(), name: n||"App", stack: st, isFavorite: f, idx: all.length, createdAt: new Date().toISOString(), type: 'html', html: c, url: "app:local" };
-                
-                await dbOp('add',b); 
-                notify("App Created!"); 
-                $('inName').value=''; $('inCode').value='';
-                loadData();
-                preview(b.id);
+            // Content
+            const content = document.createElement('div');
+            content.className = 'window-content';
+            
+            // Iframe logic
+            let src = app.url;
+            if(app.type === 'html') {
+                 const blob = new Blob([app.html], {type: 'text/html'});
+                 src = URL.createObjectURL(blob);
+            }
+            content.innerHTML = `<iframe src="${src}" class="window-iframe" sandbox="allow-scripts allow-modals allow-same-origin allow-forms"></iframe>`;
+
+            // Overlay for dragging (fixes iframe stealing mouse events)
+            const overlay = document.createElement('div');
+            overlay.className = 'absolute inset-0 bg-transparent hidden';
+            content.appendChild(overlay);
+
+            win.appendChild(header);
+            win.appendChild(content);
+            $('windows-area').appendChild(win);
+            
+            this.windows.set(app.id, win);
+            this.makeDraggable(win, header, overlay);
+            this.addToDock(app);
+        },
+
+        closeWindow: function(id) {
+            const win = this.windows.get(id);
+            if(win) {
+                win.style.opacity = '0';
+                win.style.transform = 'scale(0.9)';
+                setTimeout(() => win.remove(), 200);
+                this.windows.delete(id);
+                this.removeFromDock(id);
+            }
+        },
+
+        focusWindow: function(id) {
+            const win = this.windows.get(id);
+            if(win) {
+                win.style.zIndex = ++this.zIndex;
+                win.classList.remove('minimized');
+            }
+        },
+        
+        maximize: function(id) {
+            const win = this.windows.get(id);
+            if(win.classList.contains('w-full')) {
+                // Restore
+                win.style.width = '400px'; win.style.height = '600px'; 
+                win.style.left = '100px'; win.style.top = '100px';
+                win.classList.remove('w-full', 'h-full', 'top-0', 'left-0');
+                win.style.borderRadius = '12px';
+            } else {
+                // Maximize
+                win.style.width = '100%'; win.style.height = '100%';
+                win.style.top = '0'; win.style.left = '0';
+                win.classList.add('w-full', 'h-full');
+                win.style.borderRadius = '0';
+            }
+        },
+
+        makeDraggable: function(win, handle, overlay) {
+            let isDragging = false, startX, startY, initLeft, initTop;
+            
+            handle.addEventListener('mousedown', e => {
+                isDragging = true;
+                this.focusWindow(win.dataset.id);
+                overlay.classList.remove('hidden'); // Enable overlay to capture mouse over iframe
+                startX = e.clientX;
+                startY = e.clientY;
+                initLeft = win.offsetLeft;
+                initTop = win.offsetTop;
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            });
+
+            const onMove = e => {
+                if(!isDragging) return;
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                win.style.left = `${initLeft + dx}px`;
+                win.style.top = `${initTop + dy}px`;
             };
 
-            $('inFile').onchange=e=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=v=>{ $('inCode').value=v.target.result; if(!$('#inName').value) $('#inName').value=f.name.replace(/\.[^/.]+$/, ""); }; r.readAsText(f);}};
-            $('clearCode').onclick=()=>$('inCode').value='';
-            
-            $('inSearch').oninput=debounce(()=>refresh(),300); $('selFilter').onchange=refresh;
-            $('btnSettings').onclick=showSettings;
-            $('btnReorder').onclick=()=>{if($('selFilter').value!=="")return notify("Select 'All Stacks'",true); reorder=!reorder; refresh(); notify(reorder?"Drag ON":"Drag OFF");};
-            
-            $('standbyBtn').onclick=()=>{
-                $('standbyOverlay').classList.remove('hidden'); initThreeJS('standby-logo-canvas',1);
-                $('recentLinksList').innerHTML=recent.map(b=>`<button class="w-full text-left p-2 bg-gray-900 rounded mb-1 text-sm hover:bg-gray-800 transition border border-gray-800" onclick="$('standbyOverlay').classList.add('hidden');launch('${b.id}')"><span class="text-blue-500">●</span> ${esc(b.name)}</button>`).join('')||'<div class="text-gray-500 text-xs text-center">No recent apps</div>';
+            const onUp = () => {
+                isDragging = false;
+                overlay.classList.add('hidden');
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
             };
-            $('exitStandbyBtn').onclick=()=>$('standbyOverlay').classList.add('hidden');
-            if($('closePreviewBtn')) $('closePreviewBtn').onclick=()=>$('previewContainer').classList.add('hidden');
+        },
 
-            $('modalBody').addEventListener('change', e=>{ if(e.target.id==='sCmp'){isCompact=e.target.checked; localStorage.setItem('cs_view',isCompact); refresh();} });
-            $('modalBody').addEventListener('click', handleModalClicks);
+        addToDock: function(app) {
+            if($(`dock-icon-${app.id}`)) return;
+            const btn = document.createElement('button');
+            btn.id = `dock-icon-${app.id}`;
+            btn.className = 'w-10 h-10 rounded-xl bg-gray-800 flex items-center justify-center hover:bg-gray-700 transition relative group';
+            btn.innerHTML = `<span class="text-xl">${app.icon||'⚡'}</span><div class="absolute -bottom-2 w-1 h-1 bg-white rounded-full"></div>`;
+            btn.onclick = () => this.focusWindow(app.id);
+            $('dock-apps').appendChild(btn);
+        },
+        
+        removeFromDock: function(id) {
+            const el = $(`dock-icon-${id}`);
+            if(el) el.remove();
+        },
 
-        }catch(e){logError(e,"Init");}
-    }
+        toggleLauncher: function() {
+            const l = $('appLauncher');
+            l.classList.toggle('hidden');
+            if(!l.classList.contains('hidden')) renderFinder();
+        }
+    };
 
-    function initConsole(){
-        $('reloadPreviewBtn').onclick=()=>{ if(curPreview) preview(curPreview); };
-        $('popOutBtn').onclick=()=>{ if(curPreview){ const b=all.find(x=>x.id===curPreview); if(b){ const w=window.open('','_blank'); w.document.write(b.type==='html'?b.html:b.url); w.document.close(); } } };
-        $('clearPreviewBtn').onclick=()=>{ $('previewFrame').src='about:blank'; $('previewPlaceholder').classList.remove('hidden'); $('previewFrame').classList.add('hidden'); curPreview=null; };
-    }
-    
-    window.preview=id=>{
-        const b=all.find(x=>x.id===id); if(!b)return; curPreview=id;
-        const u=b.type==='html'?b.html:b.url;
-        if(window.innerWidth>=1024){
-            $('previewPlaceholder').classList.add('hidden'); $('previewFrame').classList.remove('hidden');
-            const d=$('previewFrame').contentWindow.document; if(b.type==='html'){d.open();d.write(u);d.close();} else $('previewFrame').src=u;
+    // --- EDITOR APP LOGIC ---
+    function openEditor(appId = null) {
+        $('editor-app').classList.remove('hidden');
+        WindowManager.zIndex++;
+        $('editor-app').style.zIndex = WindowManager.zIndex;
+        
+        currentAppId = appId;
+        if(appId) {
+            const app = all.find(x => x.id === appId);
+            if(app) {
+                $('inName').value = app.name;
+                $('inStack').value = app.stack || '';
+                $('chkFav').checked = app.isFavorite || false;
+                editorCM.setValue(app.type==='html'?app.html:app.url);
+                updatePreview(app);
+            }
         } else {
-            $('previewContainer').classList.remove('hidden'); $('previewContainer').classList.add('flex');
-            const d=$('mobilePreviewFrame').contentWindow.document; if(b.type==='html'){d.open();d.write(u);d.close();} else $('mobilePreviewFrame').src=u;
+            // New App
+            currentAppId = crypto.randomUUID();
+            $('inName').value = "Untitled Project";
+            $('inStack').value = "General";
+            editorCM.setValue("<!-- New Project -->\n<h1>Hello World</h1>");
+            updatePreview({html: "<h1>Hello World</h1>", type:'html'});
         }
     }
 
-    function refresh(){
-        const stacks=[...new Set(all.map(b=>b.stack||"General"))].sort(); $('dlStacks').innerHTML=stacks.map(s=>`<option value="${esc(s)}"></option>`).join('');
-        const cur=$('selFilter').value; $('selFilter').innerHTML=`<option value="">All Stacks</option><option value="Fav">Favorites</option>`+stacks.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join(''); $('selFilter').value=cur;
+    function closeApp(type) {
+        if(type === 'editor') $('editor-app').classList.add('hidden');
+    }
+
+    function updatePreview(app) {
+        const frame = $('editorPreviewFrame');
+        if(app.type === 'html') {
+             // Inject error capturing
+             const script = `<script>
+                window.onerror = function(msg, url, line) { window.parent.postMessage({type:'log', level:'error', message: msg}, '*'); };
+                console.log = function(...args) { window.parent.postMessage({type:'log', level:'info', message: args.join(' ')}, '*'); };
+             <\/script>`;
+             const blob = new Blob([script + (app.html || editorCM.getValue())], {type: 'text/html'});
+             frame.src = URL.createObjectURL(blob);
+        } else {
+            frame.src = app.url || editorCM.getValue();
+        }
+    }
+    
+    // --- FINDER (DASHBOARD) ---
+    function renderFinder() {
+        const stacks = [...new Set(all.map(a => a.stack || 'General'))].sort();
+        const sidebar = $('finderSidebar');
+        // Keep title
+        sidebar.innerHTML = '<div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-2 mb-2 mt-2">Stacks</div>';
         
-        $('bookmarksView').className=`flex-1 overflow-y-auto p-2 bg-gray-900 space-y-2 custom-scrollbar ${isCompact?'compact':''}`;
-        const t=$('inSearch').value.toLowerCase(), f=$('selFilter').value;
-        let l=all.filter(b=>{const s=b.stack||"General"; return (b.name.toLowerCase().includes(t)||(b.url&&b.url.toLowerCase().includes(t))||s.toLowerCase().includes(t))&&(f===""||(f==="Fav"?b.isFavorite:s===f));});
+        // Add "All"
+        const allBtn = document.createElement('div');
+        allBtn.className = 'mono-list-item text-xs text-gray-300 py-1 cursor-pointer hover:text-white mb-2';
+        allBtn.textContent = 'All Apps';
+        allBtn.onclick = () => renderFinderFiles(all);
+        sidebar.appendChild(allBtn);
+
+        stacks.forEach(s => {
+            const d = document.createElement('div');
+            d.className = 'mono-list-item text-xs text-gray-400 py-1 cursor-pointer';
+            d.textContent = s;
+            d.onclick = () => renderFinderFiles(all.filter(a => (a.stack||'General') === s));
+            sidebar.appendChild(d);
+        });
+
+        renderFinderFiles(all);
+    }
+
+    function renderFinderFiles(list) {
+        const main = $('finderMain');
+        main.innerHTML = '';
+        $('finderStatus').textContent = `${list.length} items`;
+
+        if(list.length === 0) {
+            main.innerHTML = '<div class="text-gray-600 text-xs font-mono text-center mt-10">No items found</div>';
+            return;
+        }
+
+        const grid = document.createElement('div');
+        grid.className = 'grid grid-cols-4 gap-4';
         
-        if(!reorder){ const pg=Math.ceil(l.length/8); if(pg>1){$('pager').innerHTML=`<button onclick="pg(${page-1})" ${page===1?'disabled':''} class="px-2 bg-gray-800 rounded text-xs">Prev</button><span class="text-gray-500 text-xs mx-2">${page}/${pg}</span><button onclick="pg(${page+1})" ${page===pg?'disabled':''} class="px-2 bg-gray-800 rounded text-xs">Next</button>`;$('pager').classList.remove('hidden');l=l.slice((page-1)*8,page*8);}else $('pager').classList.add('hidden');}else $('pager').classList.add('hidden');
+        list.forEach(app => {
+            const item = document.createElement('div');
+            item.className = 'flex flex-col items-center group cursor-pointer p-2 rounded hover:bg-white/5 transition';
+            item.onclick = () => { WindowManager.openApp(app); WindowManager.toggleLauncher(); };
+            
+            // Icon
+            const icon = document.createElement('div');
+            icon.className = 'w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center text-xl shadow mb-2 group-hover:scale-105 transition';
+            icon.textContent = app.type === 'html' ? '</>' : '🔗';
+            if(app.type === 'html') icon.style.background = 'linear-gradient(135deg, #3b82f6, #2563eb)';
+            
+            // Name
+            const name = document.createElement('div');
+            name.className = 'text-xs text-gray-300 font-mono text-center truncate w-full group-hover:text-white';
+            name.textContent = app.name;
+
+            // Actions
+            const actions = document.createElement('div');
+            actions.className = 'flex gap-2 mt-1 opacity-0 group-hover:opacity-100 transition';
+            actions.innerHTML = `
+                <button class="text-[10px] bg-gray-700 px-2 rounded hover:bg-blue-600" onclick="event.stopPropagation(); openEditor('${app.id}'); WindowManager.toggleLauncher();">Edit</button>
+            `;
+
+            item.appendChild(icon);
+            item.appendChild(name);
+            item.appendChild(actions);
+            grid.appendChild(item);
+        });
+        main.appendChild(grid);
+    }
+
+    // --- MAIN INIT ---
+    async function init() {
+        await initDB();
+        try { all = await dbOp('get'); } catch { all = []; }
+
+        // Setup Editor
+        editorCM = CodeMirror($('editorContainer'), {
+            mode: "htmlmixed", theme: "dracula", lineNumbers: true, viewportMargin: Infinity,
+            value: "<!-- Select an app to edit -->"
+        });
+        editorCM.on('change', debounce(() => {
+            if(currentAppId) updatePreview({ type: 'html', html: editorCM.getValue() });
+        }, 1000));
+
+        // Setup Resizer
+        setupResizer();
         
-        $('listContainer').innerHTML=l.length?'':`<div class="text-center text-gray-500 py-10 text-xs">No apps found</div>`;
-        l.forEach(b=>{
-            const div=document.createElement('div'); div.className=`bookmark-item flex items-center gap-3 p-3 bg-gray-800/50 hover:bg-gray-800 border border-gray-700/50 rounded-lg transition group ${sel.has(b.id)?'border-blue-500':''}`;
-            div.dataset.id=b.id; div.dataset.bookmarkId=b.id; div.draggable=reorder;
-            if(reorder){div.ondragstart=dStart;div.ondragover=dOver;div.ondrop=dDrop;}
-            const ico=b.type==='html'?'<div class="w-8 h-8 bg-gray-800 rounded flex items-center justify-center text-blue-400 text-xs">&lt;/&gt;</div>':`<img src="${esc(b.icon)}" class="w-8 h-8 rounded bg-white" onerror="this.style.display='none'">`;
-            div.innerHTML=`<div class="drag-handle ${reorder?'block':'hidden'} text-gray-500 cursor-move">⋮</div><input type="checkbox" class="form-checkbox ${reorder?'hidden':''}" ${sel.has(b.id)?'checked':''} onchange="togSel('${b.id}')">${ico}<div class="flex-1 min-w-0"><div class="text-sm font-medium text-gray-200 truncate">${esc(b.name)}</div><div class="text-xs text-gray-500 truncate">${esc(b.url==='app:local'?'Local App':b.url)}</div></div><span class="text-[10px] bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full">${sIcons.get(b.stack)||''} ${esc(b.stack||'General')}</span><div class="flex gap-1 opacity-0 group-hover:opacity-100 transition ${reorder?'hidden':''}"><button class="p-1.5 text-gray-400 hover:text-blue-400" onclick="preview('${b.id}')">👁️</button><button class="p-1.5 ${b.isFavorite?'text-yellow-400':'text-gray-400'}" onclick="fav('${b.id}')">★</button><button class="p-1.5 text-gray-400 hover:text-green-400" onclick="launch('${b.id}')">▶</button><button class="p-1.5 text-gray-400 hover:text-blue-400" onclick="edt('${b.id}')">✎</button><button class="p-1.5 text-gray-400 hover:text-red-400" onclick="del('${b.id}')">✕</button></div>`;
-            $('listContainer').appendChild(div);
+        // Setup ThreeJS Background
+        initBackground();
+        
+        // Desktop Icons
+        renderDesktopIcons();
+
+        // Event Listeners
+        $('saveBtn').onclick = saveCurrentApp;
+        $('createNewAppBtn').onclick = () => { WindowManager.toggleLauncher(); openEditor(); };
+        $('refreshPreview').onclick = () => updatePreview({type: 'html', html: editorCM.getValue()});
+        $('popOutPreview').onclick = () => {
+             const w = window.open('','_blank');
+             w.document.write(editorCM.getValue());
+             w.document.close();
+        };
+        $('toggleConsole').onclick = () => {
+            const c = $('editorConsole');
+            c.classList.toggle('translate-y-full');
+        };
+        $('finderSearch').oninput = (e) => {
+            const term = e.target.value.toLowerCase();
+            renderFinderFiles(all.filter(a => a.name.toLowerCase().includes(term)));
+        };
+        $('libInj').onchange = (e) => {
+            if(e.target.value) { editorCM.replaceRange(e.target.value + '\n', {line:0, ch:0}); e.target.value=''; }
+        };
+        
+        // Logs from preview
+        window.addEventListener('message', e => {
+            if(e.data?.type === 'log') {
+                const ln = document.createElement('div');
+                ln.className = e.data.level==='error'?'text-red-400 border-l-2 border-red-500 pl-1':'text-gray-400';
+                ln.textContent = `> ${e.data.message}`;
+                $('editorConsole').prepend(ln);
+            }
+        });
+    }
+    
+    // --- HELPER FUNCTIONS ---
+    async function saveCurrentApp() {
+        if(!currentAppId) return;
+        const app = {
+            id: currentAppId,
+            name: $('inName').value || 'Untitled',
+            stack: $('inStack').value || 'General',
+            isFavorite: $('chkFav').checked,
+            type: 'html',
+            html: editorCM.getValue(),
+            createdAt: new Date().toISOString()
+        };
+        await dbOp('put', app);
+        all = await dbOp('get'); // refresh cache
+        notify('Saved Successfully');
+    }
+
+    function renderDesktopIcons() {
+        const grid = $('desktop-grid');
+        grid.innerHTML = '';
+        
+        // Editor Icon
+        const editIcon = createDesktopIcon('Code Manager', '🛠️', () => openEditor());
+        grid.appendChild(editIcon);
+
+        // Finder Icon
+        const finderIcon = createDesktopIcon('Finder', '📂', () => WindowManager.toggleLauncher());
+        grid.appendChild(finderIcon);
+        
+        // Some pinned apps (Favorites)
+        all.filter(x => x.isFavorite).forEach(app => {
+             const icon = createDesktopIcon(app.name, '🚀', () => WindowManager.openApp(app));
+             grid.appendChild(icon);
         });
     }
 
-    window.pg=p=>{page=p;refresh();}
-    window.togSel=i=>{sel.has(i)?sel.delete(i):sel.add(i);const c=sel.size;$('multiSelectFooter').className=c?'absolute bottom-12 left-4 right-4 bg-blue-600 rounded-lg p-3 shadow-xl flex justify-between items-center z-30':'hidden';$('selectedCount').innerText=`${c} selected`;};
-    window.fav=async i=>{const b=all.find(x=>x.id===i);if(b){b.isFavorite=!b.isFavorite;await dbOp('put',b);loadData();}};
-    window.del=async i=>{if(confirm('Delete?')){await dbOp('delete',i);loadData();notify('Deleted');}};
-    window.edt=i=>{
-        const b=all.find(x=>x.id===i);if(!b)return; const s=[...new Set(all.map(x=>x.stack||"General"))].sort().map(o=>`<option value="${esc(o)}">`).join('');
-        showModal("Edit App",`<div class="space-y-3"><input id="eN" value="${esc(b.name)}" class="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white"><textarea id="eC" class="w-full h-32 bg-gray-800 border border-gray-600 rounded p-2 text-white font-mono">${esc(b.type==='html'?b.html:b.url)}</textarea><input id="eS" value="${esc(b.stack)}" list="eSl" class="w-full bg-gray-800 border border-gray-600 rounded p-2 text-white"><datalist id="eSl">${s}</datalist><div class="flex gap-4 text-gray-400"><label><input type="checkbox" id="eF" ${b.isFavorite?'checked':''}> Favorite</label></div></div>`,`<button id="eSv" class="bg-blue-600 px-4 py-2 rounded hover:bg-blue-500">Save</button>`);
-        $('eSv').onclick=async()=>{b.name=$('eN').value;b.stack=$('eS').value||"General";b.isFavorite=$('eF').checked;if(b.type==='html')b.html=$('eC').value; else b.url=$('eC').value; await dbOp('put',b);hideModal();loadData();notify("Updated");};
+    function createDesktopIcon(label, emoji, onClick) {
+        const d = document.createElement('div');
+        d.className = 'desktop-icon pointer-events-auto';
+        d.onclick = onClick;
+        d.innerHTML = `<div class="desktop-icon-img text-2xl bg-gray-800">${emoji}</div><span class="text-[10px] font-medium mt-1 text-center leading-tight bg-black/50 px-1 rounded">${esc(label)}</span>`;
+        return d;
     }
-    window.launch=i=>{const b=all.find(x=>x.id===i);if(b){recent=[b,...recent.filter(x=>x.id!==b.id)].slice(0,5);localStorage.setItem('cs_recent',JSON.stringify(recent));if(b.type==='html'){const w=window.open('','_blank');w.document.write(b.html);w.document.close();}else{window.open(b.url,'_blank');}}};
 
-    function showSettings(){
-        const s=[...new Set(all.map(b=>b.stack||"General"))].sort(); const ic=ICONS.map(i=>`<option value="${i}">${i||'None'}</option>`).join('');
-        const h=s.map(x=>`<div class="flex justify-between items-center py-1"><label class="text-xs text-gray-400">${esc(x)}</label><select class="ic bg-gray-700 rounded text-xs p-1" data-s="${esc(x)}">${ic.replace(`"${sIcons.get(x)||''}"`,`"${sIcons.get(x)||''}" selected`)}</select></div>`).join('');
-        const sysStats = `
-            <div class="grid grid-cols-3 gap-2 mb-4 text-center">
-                <div class="bg-gray-800 p-2 rounded"><div class="text-[10px] text-gray-500">APPS</div><div class="font-bold">${all.length}</div></div>
-                <div class="bg-gray-800 p-2 rounded"><div class="text-[10px] text-gray-500">STACKS</div><div class="font-bold">${s.length}</div></div>
-                <div class="bg-gray-800 p-2 rounded"><div class="text-[10px] text-gray-500">FAVS</div><div class="font-bold text-yellow-500">${all.filter(x=>x.isFavorite).length}</div></div>
-            </div>
-            <div class="text-center text-xs text-gray-500 mb-4 font-mono" id="sTime">${new Date().toLocaleString()}</div>
-        `;
+    function setupResizer() {
+        const resizer = $('mainResizer');
+        const left = $('editorLeft');
+        let x = 0, w = 0, dragging = false;
+
+        const onMove = e => {
+            if(!dragging) return;
+            const dx = e.clientX - x;
+            left.style.width = `${w + dx}px`;
+            editorCM.refresh();
+        };
+
+        const onUp = () => {
+            dragging = false;
+            resizer.classList.remove('resizing');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            $('editorPreviewFrame').style.pointerEvents = 'auto'; // Re-enable iframe events
+        };
+
+        resizer.addEventListener('mousedown', e => {
+            x = e.clientX;
+            w = left.getBoundingClientRect().width;
+            dragging = true;
+            resizer.classList.add('resizing');
+            $('editorPreviewFrame').style.pointerEvents = 'none'; // Prevent iframe stealing mouse
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        });
+    }
+
+    // --- THREE JS BACKGROUND ---
+    function initBackground() {
+        const cvs = $('bg-canvas');
+        if(!window.THREE) return;
+        const scene = new THREE.Scene();
+        const cam = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({canvas:cvs, alpha:true});
+        renderer.setSize(window.innerWidth, window.innerHeight);
         
-        showModal("Settings",`
-            ${sysStats}
-            <div class="space-y-4">
-                <label class="flex items-center"><input id="sCmp" type="checkbox" class="form-checkbox" ${isCompact?'checked':''}> Compact View</label>
-                <div class="border-t border-gray-700 pt-2"><h3 class="font-bold mb-2">Icons</h3><div class="max-h-32 overflow-y-auto pr-1">${h}</div><button id="sSvI" class="w-full mt-2 bg-blue-600 rounded py-1 text-xs">Save Icons</button></div><div class="flex gap-2"><button id="sExp" class="flex-1 bg-gray-700 py-1 rounded text-xs">Export</button><button id="sImp" class="flex-1 bg-gray-700 py-1 rounded text-xs">Import</button></div><button id="sTools" class="w-full bg-gray-700 py-1 rounded text-xs">Install Tools</button></div>`,`<button onclick="hideModal()" class="text-gray-400 text-xs">Close</button>`);
+        // Particles
+        const geo = new THREE.BufferGeometry();
+        const cnt = 200;
+        const pos = new Float32Array(cnt * 3);
+        for(let i=0; i<cnt*3; i++) pos[i] = (Math.random()-0.5) * 10;
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        const mat = new THREE.PointsMaterial({size: 0.05, color: 0x3b82f6});
+        const mesh = new THREE.Points(geo, mat);
+        scene.add(mesh);
         
-        $('sSvI').onclick=()=>{document.querySelectorAll('.ic').forEach(s=>sIcons.set(s.dataset.s,s.value));localStorage.setItem('cs_icons',JSON.stringify(Object.fromEntries(sIcons)));notify("Saved");refresh();};
-        $('sExp').onclick=()=>{const a=document.createElement('a');a.href="data:text/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(all));a.download='backup.json';a.click();};
-        $('sImp').onclick=()=>{showModal("Import",`<input type="file" id="fImp" class="text-sm text-gray-400">`,`<button id="doImp" class="bg-blue-600 px-3 py-1 rounded text-xs">Load</button>`);$('doImp').onclick=()=>{const f=$('fImp').files[0];if(f){const r=new FileReader();r.onload=async e=>{try{const d=JSON.parse(e.target.result);for(const i of d){i.id=crypto.randomUUID();await dbOp('add',i);}loadData();hideModal();notify("Imported");}catch{notify("Error",true);}};r.readAsText(f);}}};
-        $('sTools').onclick=async()=>{try{const r=await fetch('https://junkyardai.github.io/Cloudstax-Default-Tools/');const t=await r.text();const p=new DOMParser().parseFromString(t,'text/html');p.querySelectorAll('a').forEach(async a=>{if(a.href.startsWith('http')){await dbOp('add',{id:crypto.randomUUID(),name:a.innerText,url:a.href,stack:"Tools",icon:'',idx:all.length,type:'link'});}});loadData();notify("Tools Installed");hideModal();}catch{notify("Fetch Error",true);}};
+        cam.position.z = 5;
+        
+        const animate = () => {
+            requestAnimationFrame(animate);
+            mesh.rotation.x += 0.001;
+            mesh.rotation.y += 0.001;
+            renderer.render(scene, cam);
+        };
+        animate();
+        
+        window.addEventListener('resize', () => {
+            cam.aspect = window.innerWidth / window.innerHeight;
+            cam.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
     }
     
-    function dStart(e){dSrc=this;e.dataTransfer.effectAllowed='move';this.classList.add('dragging');}
-    function dOver(e){e.preventDefault();this.classList.add('drag-over');return false;}
-    function dDrop(e){e.stopPropagation();if(dSrc!==this){$('listContainer').insertBefore(dSrc,this);saveOrder();}return false;}
-    function dEnd(e){this.classList.remove('dragging');document.querySelectorAll('.bookmark-item').forEach(i=>i.classList.remove('drag-over'));}
-    async function saveOrder(){const i=document.querySelectorAll('.bookmark-item');for(let x=0;x<i.length;x++){const b=all.find(z=>z.id===i[x].dataset.id);if(b){b.idx=x;await dbOp('put',b);}}notify("Reordered");}
-    function handleModalClicks(e) { if(e.target.id==='closeSettings') hideModal(); if(e.target.id==='modalExportData') exportBookmarks(); if(e.target.id==='modalImportJson') handleImportJson(); }
-    function initThreeJS(cid){const c=$(cid);if(!c||!window.THREE)return;const s=new THREE.Scene(),cm=new THREE.PerspectiveCamera(75,1,0.1,1000),r=new THREE.WebGLRenderer({canvas:c,alpha:true,antialias:true});cm.position.z=3;const g=new THREE.TorusKnotGeometry(cid==='logo-canvas'?0.6:1,0.2,100,16),m=new THREE.MeshStandardMaterial({color:0x3b82f6});const mesh=new THREE.Mesh(g,m);s.add(mesh);s.add(new THREE.AmbientLight(0xffffff,0.5));const l=new THREE.PointLight(0xffffff,1);l.position.set(2,3,4);s.add(l);const a=()=>{requestAnimationFrame(a);mesh.rotation.x+=0.01;mesh.rotation.y+=0.01;r.render(s,cm);};a();}
+    // --- UTIL ---
+    function debounce(f,t){let h;return(...a)=>{clearTimeout(h);h=setTimeout(()=>f(...a),t)}}
 
-    document.addEventListener('DOMContentLoaded', init);
+    window.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
 </html>
