@@ -36,7 +36,7 @@ window.togglePin = async (id) => {
         await dbOp('put', app);
         all = await dbOp('get');
         renderDesktopIcons();
-        renderFinder(); // Refresh finder to update context menu state if reopened
+        renderFinder(); 
         notify(app.onDesktop ? "Pinned to Desktop" : "Unpinned from Desktop");
     }
     $('contextMenu').classList.add('hidden');
@@ -64,9 +64,8 @@ async function exportSystemSource() {
     if(!window.JSZip) { notify("JSZip not loaded", true); return; }
     const zip = new JSZip();
     
-    // Create Clean HTML (No inline scripts)
+    // Create Clean HTML
     let html = document.documentElement.outerHTML;
-    // Strip the data-injected stuff
     html = html.replace(/<script id="main-script">[\s\S]*?<\/script>/, '<script src="js/core.js"><\/script><script src="js/db.js"><\/script><script src="js/wm.js"><\/script><script src="js/editor.js"><\/script><script src="js/os.js"><\/script>');
     html = html.replace(/<style id="main-style">[\s\S]*?<\/style>/, '<link rel="stylesheet" href="css/style.css">');
     zip.file("index.html", html);
@@ -75,7 +74,6 @@ async function exportSystemSource() {
     const css = document.getElementById('main-style') ? document.getElementById('main-style').innerText : '';
     if(css) zip.file("css/style.css", css);
     
-    // In a real modular env, we would just fetch the files. 
     try {
         const fetchSafe = async (path) => { try { return await (await fetch(path)).text(); } catch { return "// Module not found"; } };
         zip.file("js/core.js", await fetchSafe('js/core.js'));
@@ -84,7 +82,7 @@ async function exportSystemSource() {
         zip.file("js/editor.js", await fetchSafe('js/editor.js'));
         zip.file("js/os.js", await fetchSafe('js/os.js'));
     } catch(e) {
-        notify("Warning: Could not fetch separate source files for export.", true);
+        notify("Warning: Exporting placeholder files", true);
     }
     
     const blob = await zip.generateAsync({type:"blob"});
@@ -95,11 +93,10 @@ async function exportSystemSource() {
 }
 
 // --- MODULE: BOOTSTRAP & FINDER ---
-let finderMode = 'grid'; // 'grid' or 'list'
+let finderMode = 'grid'; 
 
 function toggleFinderView() {
     finderMode = finderMode === 'grid' ? 'list' : 'grid';
-    // Update button visual
     const icon = finderMode === 'grid' ? 'grid_view' : 'list';
     const btn = document.getElementById('btnToggleView');
     if(btn) btn.innerHTML = `<span class="material-symbols-outlined text-sm">${icon}</span>`;
@@ -109,12 +106,10 @@ function toggleFinderView() {
 function renderFinder() {
     const stacks = [...new Set(all.map(a => a.stack || 'General'))].sort();
     
-    // Sidebar
     $('finderSidebar').innerHTML = '<div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-2 mb-2 mt-2">Stacks</div>';
     const allBtn = document.createElement('div'); allBtn.className = 'mono-list-item text-xs text-gray-300 py-1 cursor-pointer hover:text-white mb-2'; allBtn.textContent = 'All Apps'; allBtn.onclick = () => renderFinderFiles(all); $('finderSidebar').appendChild(allBtn);
     stacks.forEach(s => { const d = document.createElement('div'); d.className = 'mono-list-item text-xs text-gray-400 py-1 cursor-pointer'; d.textContent = s; d.onclick = () => renderFinderFiles(all.filter(a => (a.stack||'General') === s)); $('finderSidebar').appendChild(d); });
     
-    // Inject Toggle Button if not exists
     if(!document.getElementById('btnToggleView')) {
         const headerRight = document.querySelector('#appLauncher .border-b .w-10');
         if(headerRight) {
@@ -122,7 +117,6 @@ function renderFinder() {
             headerRight.innerHTML = `<button id="btnToggleView" class="text-gray-400 hover:text-white p-1" onclick="toggleFinderView()"><span class="material-symbols-outlined text-sm">list</span></button>`;
         }
     }
-
     renderFinderFiles(all);
 }
 
@@ -142,21 +136,14 @@ function renderFinderFiles(list) {
         });
         container.appendChild(grid);
     } else {
-        // List View
         const listContainer = document.createElement('div'); listContainer.className = 'flex flex-col gap-1';
         list.forEach(app => {
              const row = document.createElement('div');
              row.className = 'flex items-center gap-3 p-2 rounded hover:bg-white/10 cursor-pointer border-b border-gray-800/50';
              row.onclick = () => { WindowManager.openApp(app); WindowManager.toggleLauncher(); };
              row.oncontextmenu = (e) => showContext(e, app);
-             
              const smallIcon = app.iconUrl ? renderIconHtml(app.iconUrl, "text-lg") : (app.type==='html'?'<span class="material-symbols-outlined text-blue-400 text-lg">code</span>':'<span class="material-symbols-outlined text-gray-400 text-lg">link</span>');
-             
-             row.innerHTML = `
-                <div class="w-6 flex justify-center">${smallIcon}</div>
-                <div class="flex-1 text-xs text-gray-200 font-medium">${app.name}</div>
-                <div class="text-[10px] text-gray-500 font-mono uppercase w-20 text-right">${app.stack || 'General'}</div>
-             `;
+             row.innerHTML = `<div class="w-6 flex justify-center">${smallIcon}</div><div class="flex-1 text-xs text-gray-200 font-medium">${app.name}</div><div class="text-[10px] text-gray-500 font-mono uppercase w-20 text-right">${app.stack || 'General'}</div>`;
              listContainer.appendChild(row);
         });
         container.appendChild(listContainer);
@@ -166,6 +153,82 @@ function renderFinderFiles(list) {
 window.openSettings = () => { $('settings-app').classList.remove('hidden'); WindowManager.zIndex++; $('settings-app').style.zIndex = WindowManager.zIndex; loadSettingsUI(); }
 window.switchSettingsTab = (tab) => { document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active')); document.querySelectorAll('[id^="settings-content-"]').forEach(c => c.classList.add('hidden')); event.target.classList.add('active'); $(`settings-content-${tab}`).classList.remove('hidden'); }
 function loadSettingsUI() { const stacks = [...new Set(all.map(b=>b.stack||"General"))].sort(); const h = stacks.map(x=>` <div class="flex justify-between items-center py-2 border-b border-gray-800"> <label class="text-xs text-gray-400 w-1/3 truncate">${esc(x)}</label> <input class="stack-icon-input bg-gray-800 text-white rounded text-xs p-1 border border-gray-700 w-1/2" data-stack="${esc(x)}" value="${sIcons.get(x)||''}" placeholder="Emoji/Icon"> </div>`).join(''); $('stackIconList').innerHTML = h; }
+
+// --- FIXED TOOLS INSTALLER ---
+async function installDefaultTools() {
+    let count = 0;
+    const repoUrl = 'https://junkyardai.github.io/Cloudstax-Default-Tools/';
+    
+    try {
+        // Try fetching a hypothetical manifest or directory
+        const r = await fetch(repoUrl);
+        if(!r.ok) throw new Error("Repo unreachable");
+        const t = await r.text();
+        const p = new DOMParser().parseFromString(t,'text/html');
+        
+        // Strict filtering to avoid garbage links
+        p.querySelectorAll('a').forEach(async a => {
+            const href = a.getAttribute('href');
+            if(!href) return;
+            
+            // Resolve relative URLs against the repo URL
+            const fullUrl = new URL(href, repoUrl).href;
+            
+            // Check if it looks like a valid app/tool link 
+            // (Ignoring internal GitHub links if scraping a raw repo page)
+            if(fullUrl.startsWith('http') && !fullUrl.includes('github.com/')) {
+                 const name = a.innerText.trim() || href.split('/').pop();
+                 if(name && name.length < 50) {
+                     await dbOp('put',{
+                        id: crypto.randomUUID(),
+                        name: name,
+                        url: fullUrl,
+                        stack: "Tools",
+                        iconUrl: '',
+                        createdAt: new Date().toISOString(),
+                        type: 'link'
+                     });
+                     count++;
+                 }
+            }
+        });
+        
+        // Fallback: If scraper failed to find anything (common with 404s or empty dirs),
+        // let's manually add some known tools if the count is 0
+        if(count === 0) {
+            console.warn("Auto-discovery failed, adding fallback tools.");
+            const fallbackTools = [
+                { name: "ThreeJS Editor", url: "https://threejs.org/editor/" },
+                { name: "Excalidraw", url: "https://excalidraw.com/" },
+                { name: "SVG Editor", url: "https://editor.method.ac/" }
+            ];
+            for(const tool of fallbackTools) {
+                await dbOp('put', {
+                    id: crypto.randomUUID(),
+                    name: tool.name,
+                    url: tool.url,
+                    stack: "Tools",
+                    iconUrl: '',
+                    createdAt: new Date().toISOString(),
+                    type: 'link'
+                });
+                count++;
+            }
+        }
+
+        setTimeout(async ()=>{ 
+            all = await dbOp('get'); 
+            notify(`Installed ${count} tools`); 
+            renderDesktopIcons(); 
+            renderFinder();
+        }, 1000);
+        
+    } catch(e) {
+        console.error("Tool Install Error:", e);
+        notify("Install Failed: " + e.message, true);
+    }
+}
+
 
 async function init() {
     try {
@@ -182,7 +245,10 @@ async function init() {
         $('editorClearBtn').onclick = () => { if(confirm("Clear Code?")) editorCM.setValue(''); };
         $('btnExport').onclick = () => { const a = document.createElement('a'); a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(all)); a.download = 'Cloudstax_Backup.json'; a.click(); }; 
         $('btnImport').onclick = () => { const f = $('fileImport').files[0]; if(f){ const r = new FileReader(); r.onload = async e => { try { const d = JSON.parse(e.target.result); for(const i of d) { if(!all.find(x=>x.id===i.id)) await dbOp('put', i); } all = await dbOp('get'); renderFinder(); notify("Import Successful"); } catch { notify("Invalid JSON", true); } }; r.readAsText(f); } }; 
-        $('btnTools').onclick = async () => { try { const r = await fetch('https://junkyardai.github.io/Cloudstax-Default-Tools/'); const t = await r.text(); const p = new DOMParser().parseFromString(t,'text/html'); let count = 0; p.querySelectorAll('a').forEach(async a=>{ if(a.href.startsWith('http')){ await dbOp('put',{id:crypto.randomUUID(),name:a.innerText,url:a.href,stack:"Tools",iconUrl:'',createdAt:new Date().toISOString(),type:'link'}); count++; } }); setTimeout(async ()=>{ all = await dbOp('get'); notify(`Added ${count} tools`); renderDesktopIcons(); }, 1000); } catch { notify("Fetch Error", true); } };
+        
+        // FIXED BTN TOOLS HANDLER
+        $('btnTools').onclick = installDefaultTools;
+        
         $('btnSaveIcons').onclick = () => { document.querySelectorAll('.stack-icon-input').forEach(s => sIcons.set(s.dataset.stack, s.value)); localStorage.setItem('cs_icons', JSON.stringify(Object.fromEntries(sIcons))); notify("Icons Saved"); renderFinder(); };
         
         // FORMAT BUTTON
@@ -198,7 +264,6 @@ async function init() {
         const dlBtn = $('downloadCodeBtn');
         if(dlBtn) dlBtn.before(btnFormat);
 
-        // EXPORT BUTTON
         $('btnExportSource').onclick = exportSystemSource;
 
         window.addEventListener('message', e => { 
@@ -212,7 +277,6 @@ async function init() {
         });
         $('desktop').oncontextmenu = (e) => { e.preventDefault(); $('contextMenu').classList.add('hidden'); };
         
-        // KEYBOARD SHORTCUTS
         document.addEventListener('keydown', e => {
             if((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveCurrentApp(); }
             if((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); updatePreview({type: 'html', html: editorCM.getValue()}); }
