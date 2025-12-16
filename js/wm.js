@@ -3,6 +3,16 @@ const WindowManager = {
     zIndex: 100,
     windows: new Map(), 
     snapPreview: null,
+
+    // Universal Script for "Live Preview" Features (Console & Error logging)
+    previewScript: `<script>
+        window.onerror = function(m,u,l){ window.parent.postMessage({type:'log',level:'error',message:m + ' (Line ' + l + ')'},'*'); };
+        const _log = (l, a) => window.parent.postMessage({type:'log',level:l,message:Array.from(a).join(' ')},'*');
+        console.log = function(...a){ _log('info', a); };
+        console.error = function(...a){ _log('error', a); };
+        console.warn = function(...a){ _log('warn', a); };
+        console.info = function(...a){ _log('info', ["Console Connected"]); };
+    <\/script>`,
     
     // --- STATE MANAGEMENT ---
     getSavedState: function(id) { 
@@ -59,8 +69,11 @@ const WindowManager = {
         const content = document.createElement('div'); 
         content.className = 'window-content';
         let src = app.url;
+        
+        // INJECT PREVIEW SCRIPT for HTML apps
         if(app.type === 'html') { 
-            const blob = new Blob([app.html], {type: 'text/html'}); 
+            const fullHtml = this.previewScript + app.html;
+            const blob = new Blob([fullHtml], {type: 'text/html'}); 
             src = URL.createObjectURL(blob); 
         }
         content.innerHTML = `<iframe src="${src}" class="window-iframe" sandbox="allow-scripts allow-modals allow-same-origin allow-forms"></iframe>`;
@@ -69,7 +82,7 @@ const WindowManager = {
         const resizeHandle = document.createElement('div'); 
         resizeHandle.className = 'window-resize-handle';
         const overlay = document.createElement('div'); 
-        overlay.className = 'absolute inset-0 bg-transparent hidden'; // Overlay prevents iframe capturing mouse events during drag
+        overlay.className = 'absolute inset-0 bg-transparent hidden'; 
         content.appendChild(overlay);
         
         win.appendChild(header); 
