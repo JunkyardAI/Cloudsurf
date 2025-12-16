@@ -2,20 +2,45 @@
 function initContextMenu() {
     const menu = $('contextMenu');
     document.addEventListener('click', () => menu.classList.add('hidden'));
+    
     window.showContext = (e, app) => { 
         e.preventDefault(); 
         e.stopPropagation(); 
+        
+        // Dynamic Pin Action
+        const isPinned = app.onDesktop;
+        const pinAction = isPinned 
+            ? `<div class="ctx-item" onclick="togglePin('${app.id}')"><span class="material-symbols-outlined text-sm">keep_off</span> Unpin from Desktop</div>`
+            : `<div class="ctx-item" onclick="togglePin('${app.id}')"><span class="material-symbols-outlined text-sm">push_pin</span> Pin to Desktop</div>`;
+
         menu.innerHTML = `
             <div class="ctx-item" onclick="WindowManager.openApp(all.find(x=>x.id==='${app.id}'))"><span class="material-symbols-outlined text-sm">open_in_new</span> Open App</div>
             <div class="ctx-item" onclick="openEditor('${app.id}')"><span class="material-symbols-outlined text-sm">code</span> Edit Code</div>
+            <div class="ctx-sep"></div>
+            ${pinAction}
             <div class="ctx-item" onclick="openIconPickerFor('${app.id}')"><span class="material-symbols-outlined text-sm">image</span> Change Icon</div>
             <div class="ctx-sep"></div>
             <div class="ctx-item text-red-400 hover:bg-red-900/50" onclick="deleteApp('${app.id}')"><span class="material-symbols-outlined text-sm">delete</span> Delete</div>`; 
+            
         menu.style.left = e.pageX + 'px'; 
         menu.style.top = e.pageY + 'px'; 
         menu.classList.remove('hidden'); 
     };
 }
+
+// --- MODULE: APP ACTIONS ---
+window.togglePin = async (id) => {
+    const app = all.find(x => x.id === id);
+    if(app) {
+        app.onDesktop = !app.onDesktop;
+        await dbOp('put', app);
+        all = await dbOp('get');
+        renderDesktopIcons();
+        renderFinder(); // Refresh finder to update context menu state if reopened
+        notify(app.onDesktop ? "Pinned to Desktop" : "Unpinned from Desktop");
+    }
+    $('contextMenu').classList.add('hidden');
+};
 
 // --- MODULE: ICON_PICKER ---
 let pendingIconAppId = null;
@@ -47,18 +72,17 @@ async function exportSystemSource() {
     zip.file("index.html", html);
     zip.file("README.md", "# Cloudstax OS Source\n\nModular source export.\n\n## Running\nOpen `index.html` in browser.");
     
-    const css = document.getElementById('main-style').innerText;
-    zip.file("css/style.css", css);
+    const css = document.getElementById('main-style') ? document.getElementById('main-style').innerText : '';
+    if(css) zip.file("css/style.css", css);
     
     // In a real modular env, we would just fetch the files. 
-    // Since we might be running in the bundle, we might need to reconstruct them or fetch them if they exist.
-    // For now, assuming standard flow:
     try {
-        zip.file("js/core.js", await (await fetch('js/core.js')).text());
-        zip.file("js/db.js", await (await fetch('js/db.js')).text());
-        zip.file("js/wm.js", await (await fetch('js/wm.js')).text());
-        zip.file("js/editor.js", await (await fetch('js/editor.js')).text());
-        zip.file("js/os.js", await (await fetch('js/os.js')).text());
+        const fetchSafe = async (path) => { try { return await (await fetch(path)).text(); } catch { return "// Module not found"; } };
+        zip.file("js/core.js", await fetchSafe('js/core.js'));
+        zip.file("js/db.js", await fetchSafe('js/db.js'));
+        zip.file("js/wm.js", await fetchSafe('js/wm.js'));
+        zip.file("js/editor.js", await fetchSafe('js/editor.js'));
+        zip.file("js/os.js", await fetchSafe('js/os.js'));
     } catch(e) {
         notify("Warning: Could not fetch separate source files for export.", true);
     }
@@ -169,15 +193,23 @@ async function init() {
         btnFormat.onclick = () => {
              const totalLines = editorCM.lineCount();
              editorCM.autoFormatRange({line:0, ch:0}, {line:totalLines});
-             // Basic fallback auto-indent
              for (let i = 0; i < totalLines; i++) editorCM.indentLine(i);
         };
-        $('downloadCodeBtn').before(btnFormat);
+        const dlBtn = $('downloadCodeBtn');
+        if(dlBtn) dlBtn.before(btnFormat);
 
         // EXPORT BUTTON
         $('btnExportSource').onclick = exportSystemSource;
 
-        window.addEventListener('message', e => { if(e.data?.type === 'log') { const ln = document.createElement('div'); ln.className = e.data.level==='error'?'text-red-400 border-l-2 border-red-500 pl-1':(e.data.level==='warn'?'text-yellow-400':'text-gray-400'); ln.textContent = `> ${e.data.message}`; $('editorConsole').prepend(ln); } });
+        window.addEventListener('message', e => { 
+            if(e.data?.type === 'log') { 
+                const ln = document.createElement('div'); 
+                ln.className = e.data.level==='error'?'text-red-400 border-l-2 border-red-500 pl-1':(e.data.level==='warn'?'text-yellow-400':'text-gray-400'); 
+                ln.textContent = `> ${e.data.message}`; 
+                const consoleEl = $('editorConsole');
+                if(consoleEl) consoleEl.prepend(ln); 
+            } 
+        });
         $('desktop').oncontextmenu = (e) => { e.preventDefault(); $('contextMenu').classList.add('hidden'); };
         
         // KEYBOARD SHORTCUTS
@@ -188,7 +220,7 @@ async function init() {
 
         editorCM = CodeMirror($('editorContainer'), { mode: "htmlmixed", theme: "dracula", lineNumbers: true, viewportMargin: Infinity, value: "<!-- Select an app to edit -->" });
         editorCM.on('change', debounce(() => { if(currentAppId) updatePreview({ type: 'html', html: editorCM.getValue() }); }, 1000));
-        // Resize Observer for glitch-free editing
+        
         new ResizeObserver(() => editorCM.refresh()).observe($('editorContainer'));
 
         setupResizer(); initBackground(); initIconPicker(); initContextMenu();
