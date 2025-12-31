@@ -1,4 +1,4 @@
-// --- MODULE: WINDOW MANAGER (v7.1 - Launch Guard & Strict Mode) ---
+// --- MODULE: WINDOW MANAGER (v7.2 - Deep Runner Mode) ---
 
 const WIN_STATE_KEY = 'cloudstax_win_state';
 
@@ -75,7 +75,6 @@ window.WindowManager = {
         win.appData = app; 
 
         // --- INTERNAL APP HANDLING (Finder) ---
-        // Renders directly to DOM (no iframe) for shared context and perfect centering
         if (app.isInternal || app.id === 'finder') {
             win.className = 'window absolute flex flex-col bg-[#1e1e1e] border border-gray-700 rounded-lg shadow-2xl overflow-hidden animate-popIn';
             win.style.zIndex = this.zIndex;
@@ -115,13 +114,11 @@ window.WindowManager = {
             document.body.appendChild(win);
             this.windows.set(winId, win);
 
-            // Trigger OS rendering into the new window
             if(window.renderFinder) window.renderFinder();
             
-            // Bind Search (Re-bind required since element is new)
             const searchInput = win.querySelector('#finderSearch');
             if(searchInput) {
-                setTimeout(() => searchInput.focus(), 50); // Slight delay for focus
+                setTimeout(() => searchInput.focus(), 50); 
                 searchInput.oninput = (e) => { 
                     const val = e.target.value.toLowerCase(); 
                     const gridItems = win.querySelectorAll('#finderMain .grid > div');
@@ -133,7 +130,7 @@ window.WindowManager = {
             return;
         }
 
-        // --- STANDARD APP HANDLING (Iframe) ---
+        // --- STANDARD APP HANDLING (Runner Mode) ---
         
         win.className = 'window absolute flex flex-col bg-[#1e1e1e] border border-gray-700 rounded-lg shadow-2xl overflow-hidden animate-popIn';
         
@@ -185,6 +182,7 @@ window.WindowManager = {
 
         try {
             let fullApp = app;
+            // Fetch file content if missing (deep hydration)
             if ((!app.files || Object.keys(app.files).length === 0) && window.dbOp) {
                 const dbApp = await window.dbOp('get', app.id);
                 if (dbApp) fullApp = dbApp;
@@ -214,7 +212,7 @@ window.WindowManager = {
         }
     },
 
-    // --- Runtime Engine ---
+    // --- Runtime Engine (The Vercel-like Logic) ---
     
     launchApp: async function(app, overrideEntryPath = null) {
         if (app.url && (!app.files || Object.keys(app.files).length === 0)) {
@@ -222,42 +220,104 @@ window.WindowManager = {
         }
 
         const files = app.files || {};
-        const urlMap = {};
+        const urlMap = {}; // Stores (Raw Path -> Blob URL)
         
-        for (const path in files) {
-            const file = files[path];
-            const mime = this.getMimeType(path);
-            let blobUrl;
-            if (file.content instanceof Blob) {
-                blobUrl = URL.createObjectURL(file.content);
-            } else {
-                blobUrl = URL.createObjectURL(new Blob([file.content], { type: mime }));
+        // --- STAGE 1: ASSETS (Binary Files) ---
+        // We create blobs for these first so they are available for CSS/HTML to link to.
+        const binaryExts = ['png','jpg','jpeg','gif','webp','ico','svg','ttf','woff','woff2','mp3','mp4','wav'];
+        
+        Object.keys(files).forEach(path => {
+            const ext = path.split('.').pop().toLowerCase();
+            if (binaryExts.includes(ext)) {
+                const file = files[path];
+                const mime = this.getMimeType(path);
+                const blobUrl = file.content instanceof Blob 
+                    ? URL.createObjectURL(file.content)
+                    : URL.createObjectURL(new Blob([file.content], { type: mime }));
+                urlMap[window.normalizePath(path)] = blobUrl;
             }
-            urlMap[window.normalizePath(path)] = blobUrl;
-        }
-
-        let indexContent = "";
-        
-        if (overrideEntryPath && files[overrideEntryPath]) {
-            indexContent = files[overrideEntryPath].content;
-        } else {
-            const entryPoints = ['index.html', 'main.html', 'app.html'];
-            let indexPath = Object.keys(files).find(k => entryPoints.includes(k.toLowerCase().split('/').pop()));
-            
-            if (indexPath) indexContent = files[indexPath].content;
-            else if (app.html) indexContent = app.html; 
-            else indexContent = `<h1>${window.esc(app.name)}</h1><p>No index.html found</p>`;
-        }
-
-        const paths = Object.keys(urlMap).sort((a,b) => b.length - a.length);
-
-        paths.forEach(path => {
-            const blobUrl = urlMap[path];
-            const safePath = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(`((href|src|action)=["']|url\\(["']?)((\\./|/)?${safePath})(["']?|\\))`, 'g');
-            indexContent = indexContent.replace(regex, `$1${blobUrl}$5`);
         });
 
+        // --- STAGE 2: RESOURCES (CSS & JS) ---
+        // We process these next. We perform "Deep Replacement" to resolve relative paths inside them.
+        const resourceExts = ['css', 'js', 'jsx', 'json'];
+        
+        // Helper to resolve relative paths (e.g., "../img/logo.png" from "styles/main.css")
+        const resolveRelative = (basePath, relativePath) => {
+            const stack = basePath.split('/');
+            stack.pop(); // Remove filename
+            const parts = relativePath.split('/');
+            for (let i = 0; i < parts.length; i++) {
+                if (parts[i] === '.') continue;
+                if (parts[i] === '..') stack.pop();
+                else stack.push(parts[i]);
+            }
+            return stack.join('/');
+        };
+
+        const resources = Object.keys(files).filter(p => resourceExts.includes(p.split('.').pop().toLowerCase()));
+        
+        resources.forEach(path => {
+            let content = files[path].content;
+            if (typeof content !== 'string') return;
+
+            // Regex looks for urls/imports: url('...'), src="...", href="..."
+            // It captures the quote style to handle both ' and "
+            const regex = /url\((['"]?)(.*?)\1\)|(?:src|href)=(['"])(.*?)\3/g;
+            
+            content = content.replace(regex, (match, q1, url1, q2, url2) => {
+                const url = url1 || url2;
+                if (!url || url.startsWith('http') || url.startsWith('data:')) return match;
+                
+                const cleanPath = window.normalizePath(path);
+                const resolvedPath = window.normalizePath(resolveRelative(cleanPath, url));
+                
+                // If we have a blob for this resolved path (from Stage 1), use it
+                if (urlMap[resolvedPath]) {
+                    return match.replace(url, urlMap[resolvedPath]);
+                }
+                return match;
+            });
+
+            // Create Blob for this resource
+            const mime = this.getMimeType(path);
+            urlMap[window.normalizePath(path)] = URL.createObjectURL(new Blob([content], { type: mime }));
+        });
+
+        // --- STAGE 3: VIEW (HTML) ---
+        // Identify Entry Point
+        let indexContent = "";
+        let entryPath = overrideEntryPath;
+        
+        if (!entryPath) {
+            const entryPoints = ['index.html', 'main.html', 'app.html'];
+            entryPath = Object.keys(files).find(k => entryPoints.includes(k.toLowerCase().split('/').pop()));
+        }
+
+        if (entryPath && files[entryPath]) {
+            indexContent = files[entryPath].content;
+            
+            // Perform Deep Replacement on HTML
+            const regex = /(?:src|href|action)=(['"])(.*?)\1/g;
+            indexContent = indexContent.replace(regex, (match, quote, url) => {
+                if (!url || url.startsWith('http') || url.startsWith('data:') || url.startsWith('#')) return match;
+                
+                const cleanPath = window.normalizePath(entryPath);
+                const resolvedPath = window.normalizePath(resolveRelative(cleanPath, url));
+                
+                if (urlMap[resolvedPath]) {
+                    return `${match.split('=')[0]}=${quote}${urlMap[resolvedPath]}${quote}`;
+                }
+                return match;
+            });
+
+        } else if (app.html) {
+             indexContent = app.html; // Legacy support
+        } else {
+             indexContent = `<h1>${window.esc(app.name)}</h1><p>No index.html found</p>`;
+        }
+
+        // Inject OS Bridge (Logging, Context Menu)
         const bridge = `
         <script>
         window.onerror = function(m,u,l){ window.parent.postMessage({type:'log',level:'error',message:m + ' (Line ' + l + ')'},'*'); };
