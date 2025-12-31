@@ -1,4 +1,4 @@
-// --- MODULE: WINDOW MANAGER (v6.1 - Robust Icons & Centering) ---
+// --- MODULE: WINDOW MANAGER (v6.2 - Interaction Fixes) ---
 
 const WIN_STATE_KEY = 'cloudstax_win_state';
 
@@ -12,6 +12,30 @@ window.WindowManager = {
         window.addEventListener('mousemove', (e) => this.onDrag(e));
         window.addEventListener('mouseup', () => this.stopDrag());
         window.addEventListener('resize', () => this.recenterWindows());
+        
+        // Listen for right-clicks from inside iframes (Bridge)
+        window.addEventListener('message', (e) => {
+            if (e.data && e.data.type === 'contextmenu') {
+                const winId = e.data.id;
+                const win = document.getElementById(`win-${winId}`);
+                if (win) {
+                    const rect = win.getBoundingClientRect();
+                    // Adjust coordinates to be relative to screen, not iframe
+                    const screenX = rect.left + e.data.x;
+                    const screenY = rect.top + e.data.y + 36; // +36 for titlebar offset
+                    
+                    if (window.showContextMenu) {
+                        // Find the app object associated with this window
+                        // We might need to look it up or pass it. 
+                        // For now, let's try to find it in window.all
+                        const app = (window.all || []).find(a => a.id === winId);
+                        if (app) {
+                            window.showContextMenu({ clientX: screenX, clientY: screenY }, app);
+                        }
+                    }
+                }
+            }
+        });
     },
 
     // --- Window Spawning ---
@@ -19,6 +43,7 @@ window.WindowManager = {
     openApp: async function(app) {
         if (!app || !app.id) return;
 
+        // Editor Special Case
         if (app.type === 'editor' || app.id === 'editor') {
             if (window.Editor && window.Editor.open) {
                 window.Editor.open(app.id !== 'editor' ? app.id : null);
@@ -38,14 +63,12 @@ window.WindowManager = {
         win.id = `win-${winId}`;
         win.className = 'window absolute flex flex-col bg-[#1e1e1e] border border-gray-700 rounded-lg shadow-2xl overflow-hidden animate-popIn';
         
-        // Smart Positioning & Sizing
+        // Smart Positioning
         const saved = this.getSavedState(app.id);
         if(saved) {
             win.style.width = saved.w; win.style.height = saved.h; win.style.left = saved.x; win.style.top = saved.y;
         } else {
-            // Default Center
             const w = 900, h = 650;
-            // Ensure it doesn't spawn off-screen
             const x = Math.max(20, (window.innerWidth - w) / 2) + (this.windows.size * 20);
             const y = Math.max(20, (window.innerHeight - h) / 2) + (this.windows.size * 20);
             win.style.width = `${w}px`; win.style.height = `${h}px`;
@@ -56,8 +79,11 @@ window.WindowManager = {
         
         const iconHtml = await this.resolveAppIcon(app, "text-sm");
 
+        // Added oncontextmenu to titlebar
         win.innerHTML = `
-            <div class="h-9 bg-[#2d2d2d] border-b border-black flex items-center justify-between px-3 select-none" onmousedown="WindowManager.startDrag(event, '${win.id}')">
+            <div class="h-9 bg-[#2d2d2d] border-b border-black flex items-center justify-between px-3 select-none" 
+                 onmousedown="WindowManager.startDrag(event, '${win.id}')"
+                 oncontextmenu="event.preventDefault(); event.stopPropagation(); window.showContextMenu(event, window.all.find(a=>a.id==='${app.id}'))">
                 <div class="flex items-center gap-3">
                     <div class="flex gap-2 group">
                         <button onclick="WindowManager.close('${winId}')" class="window-close close-btn w-3 h-3 rounded-full bg-red-500 text-red-900 flex items-center justify-center font-bold text-[8px] opacity-75 group-hover:opacity-100">×</button>
@@ -87,7 +113,6 @@ window.WindowManager = {
         // Launch Process
         try {
             let fullApp = app;
-            // Fetch content if lazy loaded
             if ((!app.files || Object.keys(app.files).length === 0) && window.dbOp) {
                 const dbApp = await window.dbOp('get', app.id);
                 if (dbApp) fullApp = dbApp;
@@ -116,7 +141,7 @@ window.WindowManager = {
         }
     },
 
-    // --- The Runtime Engine ---
+    // --- Runtime Engine ---
 
     launchApp: async function(app) {
         if (app.url && (!app.files || Object.keys(app.files).length === 0)) {
@@ -130,13 +155,11 @@ window.WindowManager = {
             const file = files[path];
             const mime = this.getMimeType(path);
             let blobUrl;
-            
             if (file.content instanceof Blob) {
                 blobUrl = URL.createObjectURL(file.content);
             } else {
                 blobUrl = URL.createObjectURL(new Blob([file.content], { type: mime }));
             }
-            
             urlMap[window.normalizePath(path)] = blobUrl;
         }
 
@@ -148,25 +171,33 @@ window.WindowManager = {
         else if (app.html) indexContent = app.html; 
         else indexContent = `<h1>${window.esc(app.name)}</h1><p>No index.html found</p>`;
 
-        // Deep Link Regex
         const paths = Object.keys(urlMap).sort((a,b) => b.length - a.length);
 
         paths.forEach(path => {
             const blobUrl = urlMap[path];
             const safePath = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            // Regex to match src="path", url('path') etc.
             const regex = new RegExp(`((href|src|action)=["']|url\\(["']?)((\\./|/)?${safePath})(["']?|\\))`, 'g');
             indexContent = indexContent.replace(regex, `$1${blobUrl}$5`);
         });
 
-        // Bridge
+        // Bridge with Context Menu Support
         const bridge = `
         <script>
         window.onerror = function(m,u,l){ window.parent.postMessage({type:'log',level:'error',message:m + ' (Line ' + l + ')'},'*'); };
         const _log = (l, a) => window.parent.postMessage({type:'log',level:l,message:Array.from(a).join(' ')},'*');
         console.log = function(...a){ _log('info', a); };
         console.error = function(...a){ _log('error', a); };
-        console.warn = function(...a){ _log('warn', a); };
+        
+        // Capture Right Click and send to Parent OS
+        window.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            window.parent.postMessage({
+                type: 'contextmenu',
+                id: '${app.id}',
+                x: e.clientX,
+                y: e.clientY
+            }, '*');
+        });
         </script>`;
         
         if (indexContent.includes('</body>')) {
@@ -178,44 +209,7 @@ window.WindowManager = {
         return indexContent;
     },
 
-    // --- Icon Resolution ---
-
-    resolveAppIcon: async function(app, classes = "") {
-        // 1. Internal Base64 Data (New Standard)
-        if (app.iconData) {
-            return `<img src="${app.iconData}" class="${classes} object-contain select-none pointer-events-none">`;
-        }
-        
-        // 2. Google Font Icon (Legacy)
-        if (!app.iconUrl) return `<span class="material-symbols-outlined ${classes}">grid_view</span>`;
-        if (/^[a-z0-9_]+$/.test(app.iconUrl)) return `<span class="material-symbols-outlined ${classes}">${app.iconUrl}</span>`;
-        
-        // 3. File in App Bundle (Legacy)
-        let files = app.files;
-        if (!files && window.dbOp) {
-            const dbApp = await window.dbOp('get', app.id);
-            if (dbApp) files = dbApp.files;
-        }
-
-        if (files) {
-            const cleanPath = window.normalizePath(app.iconUrl);
-            const file = files[cleanPath] || files[app.iconUrl];
-            if (file) {
-                let url;
-                if (file.type === 'blob' || file.content instanceof Blob) {
-                    url = URL.createObjectURL(file.content);
-                } else {
-                    url = `data:image/svg+xml;base64,${btoa(file.content)}`; 
-                }
-                return `<img src="${url}" class="${classes} object-contain select-none pointer-events-none">`;
-            }
-        }
-
-        // 4. External URL (Fallback)
-        return `<img src="${app.iconUrl}" class="${classes} object-contain select-none pointer-events-none" onerror="this.style.display='none'">`;
-    },
-
-    // --- Window Controls ---
+    // --- Controls ---
 
     close: function(id) {
         const win = document.getElementById(`win-${id}`);
@@ -253,7 +247,6 @@ window.WindowManager = {
         const winId = id.startsWith('win-') || id === 'editor-app' ? id : `win-${id}`;
         const win = document.getElementById(winId);
         if (!win) return;
-        
         if (win.dataset.maximized === 'true') {
             win.style.top = win.dataset.prevTop;
             win.style.left = win.dataset.prevLeft;
@@ -276,8 +269,10 @@ window.WindowManager = {
     },
 
     recenterWindows: function() {
-        // Optional: logic to ensure windows stay on screen during resize
+        // Optional
     },
+
+    // --- Dock Logic (Fixed) ---
 
     addToDock: async function(app) {
         const dock = document.getElementById('dock-apps');
@@ -296,93 +291,104 @@ window.WindowManager = {
                 ${window.esc(app.name)}
             </div>
         `;
+
+        // FIXED: Interaction Logic
         btn.onclick = () => {
+            // Priority 1: Custom Action (for System Apps like Finder/Settings)
+            if (app.action && typeof app.action === 'function') {
+                app.action();
+                return;
+            }
+
+            // Priority 2: Editor Special Case
+            if (app.id === 'editor' || app.type === 'editor') {
+                if(window.Editor && window.Editor.open) window.Editor.open();
+                this.focusWindow('editor-app');
+                return;
+            }
+
+            // Priority 3: Standard Window Management
             const win = document.getElementById(`win-${app.id}`);
             if (win && win.classList.contains('minimized')) this.focusWindow(app.id);
             else if (win && parseInt(win.style.zIndex) === this.zIndex) this.minimize(app.id);
             else this.focusWindow(app.id);
         };
+
+        // FIXED: Context Menu on Dock Icon
+        btn.oncontextmenu = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if(window.showContextMenu) window.showContextMenu(e, app);
+        };
+
         dock.appendChild(btn);
     },
 
     removeFromDock: function(id) {
-        // System apps persist in dock
         if(['finder', 'editor', 'settings'].includes(id)) return;
         const el = document.getElementById(`dock-icon-${id}`);
         if (el) el.remove();
     },
 
+    // --- Launcher Logic (Fixed Alignment) ---
+
     toggleLauncher: function() {
         const l = document.getElementById('appLauncher');
         if (l) {
-            const isHidden = l.classList.contains('hidden');
-            if (isHidden) {
-                l.classList.remove('hidden');
+            l.classList.toggle('hidden');
+            if (!l.classList.contains('hidden')) {
                 this.zIndex++;
                 l.style.zIndex = this.zIndex + 10;
+                
+                // FORCE CENTERING
+                l.style.position = 'fixed';
+                l.style.left = '50%';
+                l.style.top = '50%';
+                l.style.transform = 'translate(-50%, -50%)';
+                l.style.width = '80vw';
+                l.style.maxWidth = '900px';
+                l.style.maxHeight = '80vh';
+                
                 if (window.renderFinder) window.renderFinder();
-            } else {
-                l.classList.add('hidden');
             }
         }
     },
 
-    // --- State Storage ---
-    getSavedState: function(id) { 
-        try { return JSON.parse(localStorage.getItem(WIN_STATE_KEY)||'{}')[id]; } catch { return null; } 
-    },
-    
-    saveState: function(id, rect) { 
-        try { 
-            const states = JSON.parse(localStorage.getItem(WIN_STATE_KEY)||'{}'); 
-            states[id] = rect; 
-            localStorage.setItem(WIN_STATE_KEY, JSON.stringify(states)); 
-        } catch {} 
-    },
+    // --- Utilities ---
 
-    startDrag: function(e, id) {
-        if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
-        const win = document.getElementById(id);
-        if (!win || win.dataset.maximized === 'true') return;
-
-        this.focusWindow(id);
-        this.activeDrag = win;
-        this.dragOffset = {
-            x: e.clientX - win.offsetLeft,
-            y: e.clientY - win.offsetTop
-        };
-        document.querySelectorAll('iframe').forEach(f => f.style.pointerEvents = 'none');
-    },
-
-    onDrag: function(e) {
-        if (!this.activeDrag) return;
-        e.preventDefault();
-        this.activeDrag.style.left = (e.clientX - this.dragOffset.x) + 'px';
-        this.activeDrag.style.top = (e.clientY - this.dragOffset.y) + 'px';
-    },
-
-    stopDrag: function() {
-        if (this.activeDrag) {
-            const win = this.activeDrag;
-            this.saveState(win.id.replace('win-', ''), {
-                x: win.style.left, y: win.style.top, w: win.style.width, h: win.style.height
-            });
-            this.activeDrag = null;
-            document.querySelectorAll('iframe').forEach(f => f.style.pointerEvents = 'auto');
+    resolveAppIcon: async function(app, classes = "") {
+        if (app.iconData) return `<img src="${app.iconData}" class="${classes} object-contain select-none pointer-events-none">`;
+        if (!app.iconUrl) return `<span class="material-symbols-outlined ${classes}">grid_view</span>`;
+        if (/^[a-z0-9_]+$/.test(app.iconUrl)) return `<span class="material-symbols-outlined ${classes}">${app.iconUrl}</span>`;
+        
+        let files = app.files;
+        if (!files && window.dbOp) {
+            const dbApp = await window.dbOp('get', app.id);
+            if (dbApp) files = dbApp.files;
         }
+
+        if (files) {
+            const cleanPath = window.normalizePath(app.iconUrl);
+            const file = files[cleanPath] || files[app.iconUrl];
+            if (file) {
+                let url;
+                if (file.type === 'blob' || file.content instanceof Blob) {
+                    url = URL.createObjectURL(file.content);
+                } else {
+                    url = `data:image/svg+xml;base64,${btoa(file.content)}`; 
+                }
+                return `<img src="${url}" class="${classes} object-contain select-none pointer-events-none">`;
+            }
+        }
+        return `<img src="${app.iconUrl}" class="${classes} object-contain select-none pointer-events-none" onerror="this.style.display='none'">`;
     },
 
-    getMimeType: function(path) {
-        const ext = path.split('.').pop().toLowerCase();
-        return ({
-            'js': 'text/javascript', 'jsx': 'text/javascript', 
-            'css': 'text/css', 'html': 'text/html',
-            'json': 'application/json', 
-            'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 
-            'svg': 'image/svg+xml', 'gif': 'image/gif', 'webp': 'image/webp',
-            'ico': 'image/x-icon'
-        })[ext] || 'text/plain';
-    }
+    getSavedState: function(id) { try { return JSON.parse(localStorage.getItem(WIN_STATE_KEY)||'{}')[id]; } catch { return null; } },
+    saveState: function(id, rect) { try { const states = JSON.parse(localStorage.getItem(WIN_STATE_KEY)||'{}'); states[id] = rect; localStorage.setItem(WIN_STATE_KEY, JSON.stringify(states)); } catch {} },
+    startDrag: function(e, id) { if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return; const win = document.getElementById(id); if (!win || win.dataset.maximized === 'true') return; this.focusWindow(id); this.activeDrag = win; this.dragOffset = { x: e.clientX - win.offsetLeft, y: e.clientY - win.offsetTop }; document.querySelectorAll('iframe').forEach(f => f.style.pointerEvents = 'none'); },
+    onDrag: function(e) { if (!this.activeDrag) return; e.preventDefault(); this.activeDrag.style.left = (e.clientX - this.dragOffset.x) + 'px'; this.activeDrag.style.top = (e.clientY - this.dragOffset.y) + 'px'; },
+    stopDrag: function() { if (this.activeDrag) { const win = this.activeDrag; this.saveState(win.id.replace('win-', ''), { x: win.style.left, y: win.style.top, w: win.style.width, h: win.style.height }); this.activeDrag = null; document.querySelectorAll('iframe').forEach(f => f.style.pointerEvents = 'auto'); } },
+    getMimeType: function(path) { const ext = path.split('.').pop().toLowerCase(); return ({ 'js': 'text/javascript', 'jsx': 'text/javascript', 'css': 'text/css', 'html': 'text/html', 'json': 'application/json', 'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'svg': 'image/svg+xml', 'gif': 'image/gif', 'webp': 'image/webp', 'ico': 'image/x-icon' })[ext] || 'text/plain'; }
 };
 
 window.WindowManager.init();
