@@ -1,4 +1,4 @@
-// --- MODULE: EDITOR 7.1 (Robust Import Engine & Scaffold) ---
+// --- MODULE: EDITOR 7.1 (Refined & Robust) ---
 
 window.Editor = {
     // State
@@ -8,8 +8,8 @@ window.Editor = {
         appId: null,
         mode: 'split',       
         blobs: [],           
-        consoleHeight: '128px',
-        expandedFolders: new Set(),
+        consoleOpen: true,
+        expandedFolders: new Set(), // Persist folder state
         initialized: false,
         iconData: null,
         hasUnsavedChanges: false,
@@ -52,6 +52,9 @@ window.Editor = {
         this.updateCategoryDropdown();
         this.state.hasUnsavedChanges = false;
         this.updateUnsavedIndicator();
+        
+        // Restore Console State
+        this.toggleConsole(this.state.consoleOpen);
     },
 
     close: function() {
@@ -63,18 +66,91 @@ window.Editor = {
         this.updateUnsavedIndicator();
     },
 
-    // --- Import Engine (MANUAL FIX APPLIED) ---
+    // --- Project Management Controls (MISSING FIXED) ---
 
-    // 1. Trigger File Explorer for Folders
+    newFile: function() {
+        const path = prompt("Enter file path (e.g., src/main.js):", "");
+        if (!path) return;
+        
+        const cleanPath = window.normalizePath(path);
+        if (this.state.files[cleanPath]) {
+            if(window.notify) window.notify("File already exists", true);
+            return;
+        }
+
+        // Detect type
+        const isCss = cleanPath.endsWith('.css');
+        const isHtml = cleanPath.endsWith('.html');
+        const isJs = cleanPath.endsWith('.js') || cleanPath.endsWith('.jsx');
+        const isJson = cleanPath.endsWith('.json');
+        
+        let content = "";
+        if (isHtml) content = "<!DOCTYPE html>\n<html>\n<body>\n\n</body>\n</html>";
+        if (isJs) content = "// New File\n";
+        if (isCss) content = "/* New Styles */\n";
+        if (isJson) content = "{}";
+
+        this.state.files[cleanPath] = { content: content, type: 'text' };
+        
+        // Auto-expand folders to show new file
+        const parts = cleanPath.split('/');
+        let currentPath = "";
+        for(let i=0; i<parts.length-1; i++) {
+            currentPath += (i===0 ? "" : "/") + parts[i];
+            this.state.expandedFolders.add(currentPath);
+        }
+
+        this.renderTree();
+        this.switchFile(cleanPath);
+        this.markUnsaved();
+    },
+
+    deleteFile: function(path) {
+        if(!confirm(`Delete "${path}"?`)) return;
+        
+        delete this.state.files[path];
+        
+        if (this.state.activeFilePath === path) {
+            this.state.activeFilePath = null;
+            if(window.editorCM) window.editorCM.setValue("");
+            // Try to switch to index.html or first available
+            const next = this.findEntryPoint();
+            if(next) this.switchFile(next);
+        }
+        
+        this.renderTree();
+        this.markUnsaved();
+        this.refreshPreview();
+    },
+
+    deleteProject: async function() {
+        if(!this.state.appId) return;
+        if(!confirm("Permanently delete this project? This cannot be undone.")) return;
+
+        try {
+            if(window.dbOp) await window.dbOp('delete', this.state.appId);
+            if(window.notify) window.notify("Project Deleted");
+            if(window.refreshApps) window.refreshApps();
+            
+            // Close editor
+            this.state.hasUnsavedChanges = false; // Bypass check
+            document.getElementById('saveOptionsModal').classList.add('hidden');
+            document.getElementById('editor-app').classList.add('hidden');
+        } catch(e) {
+            console.error(e);
+            if(window.notify) window.notify("Delete failed", true);
+        }
+    },
+
+    // --- Import Engine ---
+
     triggerFolderImport: function() {
-        // Always create a fresh input to avoid "change" event missing if same folder selected
         const oldInput = document.getElementById('folderImportInput');
         if(oldInput) oldInput.remove();
 
         const input = document.createElement('input');
         input.id = 'folderImportInput';
         input.type = 'file';
-        // These 3 attributes are crucial for folder support across Chrome/Edge/Firefox
         input.setAttribute('webkitdirectory', '');
         input.setAttribute('directory', '');
         input.setAttribute('multiple', '');
@@ -82,20 +158,14 @@ window.Editor = {
         
         input.onchange = (e) => this.handleInputImport(e);
         document.body.appendChild(input);
-        
-        // Slight delay to ensure DOM update before click
         setTimeout(() => input.click(), 50);
     },
 
-    // 2. Handle Input Change
     handleInputImport: async function(e) {
         const files = Array.from(e.target.files);
         if(files.length === 0) return;
-        
         if(window.notify) window.notify(`Reading ${files.length} items...`);
 
-        // Map File objects to our internal structure
-        // webkitRelativePath is strictly required for folders via Input
         const batch = files.map(f => ({ 
             entry: f, 
             path: f.webkitRelativePath || f.name 
@@ -104,7 +174,6 @@ window.Editor = {
         await this.processImportBatch(batch);
     },
 
-    // 3. Handle Drag & Drop (Recursion Fixed)
     handleDropImport: async function(e) {
         e.preventDefault();
         e.stopPropagation();
@@ -113,7 +182,6 @@ window.Editor = {
         const entries = [];
         
         for (let i = 0; i < items.length; i++) {
-            // webkitGetAsEntry is the standard for modern drag-and-drop file access
             const item = items[i].webkitGetAsEntry();
             if (item) {
                 await this.scanEntryRecursive(item, "", entries);
@@ -125,12 +193,10 @@ window.Editor = {
         }
     },
 
-    // 4. Robust Recursive Scanner (Loop Logic)
     scanEntryRecursive: async function(entry, path, resultList) {
         if (entry.isFile) {
             return new Promise((resolve) => {
                 entry.file((file) => {
-                    // Combine path + filename, sanitize slashes
                     const fullPath = (path + file.name).replace(/\/+/g, '/');
                     resultList.push({ entry: file, path: fullPath });
                     resolve();
@@ -139,8 +205,6 @@ window.Editor = {
         } else if (entry.isDirectory) {
             const reader = entry.createReader();
             let entriesBatch = [];
-            
-            // "readEntries" returns a batch. We must loop until it returns 0.
             const readBatch = async () => {
                 return new Promise((resolve, reject) => {
                     reader.readEntries(resolve, reject);
@@ -148,7 +212,6 @@ window.Editor = {
             };
 
             try {
-                // Loop to get ALL files in directory, not just first 100
                 do {
                     entriesBatch = await readBatch();
                     const promises = entriesBatch.map(child => 
@@ -162,14 +225,10 @@ window.Editor = {
         }
     },
 
-    // 5. The Batch Processor (System File Filter)
     processImportBatch: async function(fileObjects) {
-        if(window.notify) window.notify(`Processing ${fileObjects.length} files...`);
-        
-        // A. Filter Junk Files FIRST
+        // A. Filter Junk Files
         const validFiles = fileObjects.filter(f => {
             const p = f.path;
-            // Filter Mac/Windows system files and hidden configs
             if (p.includes('__MACOSX') || p.includes('.DS_Store') || p.includes('Desktop.ini') || p.includes('Thumbs.db')) return false;
             if (p.includes('.git/') || p.includes('node_modules/')) return false;
             return true;
@@ -181,19 +240,16 @@ window.Editor = {
         }
 
         // B. Root Detection Logic
-        // If I drag "MyProject", paths are "MyProject/src/..."
-        // We want to detect "MyProject/" and strip it, but use "MyProject" as the App Name.
         const firstPath = validFiles[0].path;
         const rootMatch = firstPath.match(/^([^/]+)\//);
         let rootPrefix = "";
         
         if (rootMatch) {
             const potentialRoot = rootMatch[1];
-            // Verify ALL files start with this root
             const allMatch = validFiles.every(f => f.path.startsWith(potentialRoot + "/"));
             if (allMatch) {
                 rootPrefix = potentialRoot + "/";
-                this.setFieldValue('inName', potentialRoot); // Set App Name to Folder Name
+                this.setFieldValue('inName', potentialRoot);
             }
         }
 
@@ -202,11 +258,10 @@ window.Editor = {
 
         const promises = validFiles.map(async (f) => {
             const rawPath = f.path;
-            // Strip root prefix if it exists
             let finalPath = rawPath.startsWith(rootPrefix) ? rawPath.slice(rootPrefix.length) : rawPath;
             finalPath = window.normalizePath(finalPath);
             
-            if (!finalPath) return; // Skip empty paths
+            if (!finalPath) return;
 
             const ext = finalPath.split('.').pop().toLowerCase();
             const isText = textExtensions.has(ext);
@@ -225,10 +280,7 @@ window.Editor = {
 
         await Promise.all(promises);
 
-        // C. Merge
         this.state.files = { ...this.state.files, ...newVFS };
-        
-        // D. Update UI
         this.renderTree();
         const index = this.findEntryPoint();
         if(index) this.switchFile(index);
@@ -238,7 +290,7 @@ window.Editor = {
         this.markUnsaved();
     },
 
-    // --- Scaffold Generator (Preserved) ---
+    // --- Scaffold Generator ---
     
     toggleScaffold: function() { document.getElementById('scaffoldModal').classList.toggle('hidden'); },
     
@@ -311,7 +363,7 @@ window.Editor = {
         return root;
     },
 
-    // --- Recursive Zip Export ---
+    // --- Zip Export ---
 
     downloadZip: async function() {
         if(!window.JSZip) return window.notify("JSZip missing", true);
@@ -344,6 +396,10 @@ window.Editor = {
         this.setCheckValue('chkDesk', app.onDesktop || false);
         
         this.state.files = JSON.parse(JSON.stringify(app.files || {}));
+        
+        // Reset folders but keep root open
+        this.state.expandedFolders.clear();
+        
         this.renderTree();
 
         const entry = this.findEntryPoint();
@@ -400,10 +456,15 @@ window.Editor = {
         
         const isImage = this.isBinaryFile(path);
         const isSvg = path.toLowerCase().endsWith('.svg');
+        
+        // Always handle visual toggling first
         this.toggleImagePreview(isImage || isSvg, file);
 
         if (!isImage && window.editorCM) {
-            if(isSvg) this.toggleImagePreview(false, null);
+            // Safe guard for SVG which is both binary-like and text
+            if(isSvg) this.toggleImagePreview(false, null); 
+            
+            // Explicitly set value to avoid CM retention issues
             window.editorCM.setValue(file.content || "");
             window.editorCM.setOption('readOnly', false);
             window.editorCM.clearHistory();
@@ -419,6 +480,7 @@ window.Editor = {
             const modeDisplay = document.getElementById('sb-mode');
             if(modeDisplay) modeDisplay.textContent = modeMap[ext] || 'text';
         }
+        
         this.highlightActiveFile(path);
         this.updateStatusBar();
         if(this.state.deepTestMode) this.refreshPreview(); 
@@ -448,49 +510,131 @@ window.Editor = {
         if(urlBar) urlBar.textContent = `local://${appName.toLowerCase().replace(/\s/g,'-')}/${this.state.activeFilePath||''}`;
     },
 
-    // --- Visualization ---
+    launchExternalPreview: function() {
+        // Deep Launch - creates a full standalone blob URL
+        const frame = document.getElementById('editorPreviewFrame');
+        if (!frame || !frame.srcdoc) return;
+
+        const blob = new Blob([frame.srcdoc], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        
+        // Cleanup blob after delay
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+    },
+
+    // --- Visualization & UI ---
+    
+    toggleConsole: function(forceState = null) {
+        const con = document.getElementById('editorConsole');
+        const icon = document.getElementById('consoleToggleIcon');
+        if(!con) return;
+        
+        if (forceState !== null) {
+            this.state.consoleOpen = forceState;
+        } else {
+            this.state.consoleOpen = !this.state.consoleOpen;
+        }
+
+        if (this.state.consoleOpen) {
+            con.style.height = '128px'; 
+            con.classList.remove('h-8'); // Minimized height
+            if(icon) icon.innerText = 'expand_more';
+        } else {
+            con.style.height = '28px'; // Header only
+            con.classList.add('h-8');
+            if(icon) icon.innerText = 'expand_less';
+        }
+    },
+
     renderTree: function() {
         const treeContainer = document.getElementById('fileTreeContent');
         if(!treeContainer) return;
         treeContainer.innerHTML = '';
         const files = this.state.files;
-        const root = { name: 'root', children: {}, files: [] };
+        
+        // Build hierarchy with Full Path tracking
+        const root = { name: 'root', path: "", children: {}, files: [] };
+        
         Object.keys(files).forEach(path => {
             const parts = path.split('/');
             const fileName = parts.pop();
             let current = root;
+            let currentPath = "";
+            
             parts.forEach(part => {
-                if (!current.children[part]) current.children[part] = { name: part, children: {}, files: [] };
+                currentPath += (currentPath ? "/" : "") + part;
+                if (!current.children[part]) {
+                    current.children[part] = { name: part, path: currentPath, children: {}, files: [] };
+                }
                 current = current.children[part];
             });
             current.files.push({ name: fileName, fullPath: path });
         });
+        
         this.renderFolder(root, treeContainer, 0);
     },
 
     renderFolder: function(folder, container, depth) {
+        // Sort folders first
         Object.keys(folder.children).sort().forEach(folderName => {
             const subFolder = folder.children[folderName];
+            const fullPath = subFolder.path;
+            
             const folderDiv = document.createElement('div');
             folderDiv.className = 'ml-2';
-            const isExpanded = depth < 2; 
+            
+            // Check persistence state, default to open if root (depth 0)
+            const isExpanded = this.state.expandedFolders.has(fullPath) || depth === 0; 
+            
             const label = document.createElement('div');
             label.className = 'flex items-center gap-1 text-gray-400 hover:text-white cursor-pointer py-0.5 select-none';
             label.style.paddingLeft = `${depth * 8}px`;
             label.innerHTML = `<span class="material-symbols-outlined text-[14px] transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}">chevron_right</span><span class="text-xs font-bold text-blue-200/70">${folderName}</span>`;
+            
             const childrenContainer = document.createElement('div');
             childrenContainer.className = isExpanded ? 'block' : 'hidden';
-            label.onclick = (e) => { e.stopPropagation(); const arrow = label.querySelector('.material-symbols-outlined'); if (childrenContainer.classList.contains('hidden')) { childrenContainer.classList.remove('hidden'); arrow.classList.add('rotate-90'); } else { childrenContainer.classList.add('hidden'); arrow.classList.remove('rotate-90'); } };
-            folderDiv.appendChild(label); folderDiv.appendChild(childrenContainer); container.appendChild(folderDiv);
+            
+            label.onclick = (e) => { 
+                e.stopPropagation(); 
+                const arrow = label.querySelector('.material-symbols-outlined'); 
+                
+                if (childrenContainer.classList.contains('hidden')) { 
+                    childrenContainer.classList.remove('hidden'); 
+                    arrow.classList.add('rotate-90'); 
+                    this.state.expandedFolders.add(fullPath);
+                } else { 
+                    childrenContainer.classList.add('hidden'); 
+                    arrow.classList.remove('rotate-90');
+                    this.state.expandedFolders.delete(fullPath); 
+                } 
+            };
+            
+            folderDiv.appendChild(label); 
+            folderDiv.appendChild(childrenContainer); 
+            container.appendChild(folderDiv);
+            
             this.renderFolder(subFolder, childrenContainer, depth + 1);
         });
+        
+        // Render files
         folder.files.sort((a,b) => a.name.localeCompare(b.name)).forEach(file => {
             const fileDiv = document.createElement('div');
             const isActive = file.fullPath === this.state.activeFilePath;
+            
             fileDiv.className = `flex items-center gap-2 py-1 cursor-pointer text-xs rounded transition-colors group ${isActive ? 'bg-blue-900/40 text-blue-400' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`;
             fileDiv.style.paddingLeft = `${(depth * 8) + 16}px`; 
             fileDiv.id = `file-item-${file.fullPath.replace(/[^a-zA-Z0-9]/g, '-')}`;
-            fileDiv.innerHTML = `<span class="material-symbols-outlined text-[14px] ${isActive ? 'text-blue-400' : 'text-gray-500'}">${this.getFileIcon(file.fullPath)}</span><span class="truncate flex-1">${file.name}</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-red-400" onclick="event.stopPropagation(); window.Editor.deleteFile('${file.fullPath}')"><span class="material-symbols-outlined text-[10px]">close</span></button>`;
+            
+            fileDiv.innerHTML = `<span class="material-symbols-outlined text-[14px] ${isActive ? 'text-blue-400' : 'text-gray-500'}">${this.getFileIcon(file.fullPath)}</span><span class="truncate flex-1">${file.name}</span><button class="opacity-0 group-hover:opacity-100 p-0.5 hover:text-red-400" title="Delete File"><span class="material-symbols-outlined text-[10px]">close</span></button>`;
+            
+            // Delete button Logic
+            const delBtn = fileDiv.querySelector('button');
+            delBtn.onclick = (ev) => {
+                ev.stopPropagation();
+                this.deleteFile(file.fullPath);
+            };
+
             fileDiv.onclick = (e) => { e.stopPropagation(); this.switchFile(file.fullPath); };
             container.appendChild(fileDiv);
         });
@@ -507,6 +651,7 @@ window.Editor = {
             'app.js': { content: 'console.log("Hello World");', type: 'text' }
         };
         this.state.activeFilePath = 'index.html';
+        this.state.expandedFolders.clear();
         this.setFieldValue('inName', "Untitled Project");
         this.setFieldValue('inStack', "Development");
         this.renderTree();
@@ -550,7 +695,40 @@ window.Editor = {
     highlightActiveFile: function(path) { document.querySelectorAll('[id^="file-item-"]').forEach(el => el.classList.remove('bg-blue-900/40', 'text-blue-400')); const activeEl = document.getElementById(`file-item-${path.replace(/[^a-zA-Z0-9]/g, '-')}`); if(activeEl) activeEl.classList.add('bg-blue-900/40', 'text-blue-400'); },
     setLayout: function(mode) { this.state.mode = mode; const container = document.getElementById('editorContainer'); const preview = document.getElementById('editorPreviewPane'); const btns = ['btnViewCode', 'btnViewSplit', 'btnViewPreview']; btns.forEach(b => { const el = document.getElementById(b); if(el) el.classList.remove('text-white', 'bg-white/10'); }); const activeBtn = mode === 'code' ? 'btnViewCode' : mode === 'preview' ? 'btnViewPreview' : 'btnViewSplit'; const el = document.getElementById(activeBtn); if(el) el.classList.add('text-white', 'bg-white/10'); container.classList.remove('hidden', 'w-full', 'w-1/2'); preview.classList.remove('hidden', 'w-full', 'w-1/2'); if (mode === 'code') { container.classList.add('w-full'); preview.classList.add('hidden'); } else if (mode === 'preview') { container.classList.add('hidden'); preview.classList.add('w-full'); this.refreshPreview(); } else { container.classList.add('w-1/2'); preview.classList.add('w-1/2'); this.refreshPreview(); } if(window.editorCM) window.editorCM.refresh(); },
     bindShortcuts: function() { window.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); this.toggleSaveOptions(); } }); },
-    initDeepIntegrations: function() { const app = document.getElementById('editor-app'); const overlay = document.createElement('div'); overlay.className = 'absolute inset-0 bg-blue-500/20 border-2 border-blue-400 hidden z-50 flex items-center justify-center text-blue-200 text-xl font-bold backdrop-blur-sm pointer-events-none'; overlay.innerText = 'Drop folder to import'; overlay.id = 'drop-overlay'; app.appendChild(overlay); app.addEventListener('dragover', (e) => { e.preventDefault(); document.getElementById('drop-overlay').classList.remove('hidden'); }); app.addEventListener('dragleave', (e) => { e.preventDefault(); document.getElementById('drop-overlay').classList.add('hidden'); }); app.addEventListener('drop', (e) => { e.preventDefault(); document.getElementById('drop-overlay').classList.add('hidden'); this.handleDropImport(e); }); const container = document.getElementById('editorContainer'); if(container && !document.getElementById('editor-status-bar')) { const sb = document.createElement('div'); sb.id = 'editor-status-bar'; sb.className = 'absolute bottom-0 left-0 right-0 bg-[#191a21] text-gray-500 text-[10px] px-2 py-1 flex justify-between border-t border-gray-800 z-20'; sb.innerHTML = `<div class="flex gap-4"><span id="sb-file">No file</span> <span id="sb-mode"></span></div> <span id="sb-cursor">Ln 1, Col 1</span>`; container.appendChild(sb); } if(window.editorCM) { window.editorCM.on('cursorActivity', (cm) => { const pos = cm.getCursor(); const el = document.getElementById('sb-cursor'); if(el) el.textContent = `Ln ${pos.line + 1}, Col ${pos.ch + 1}`; }); window.editorCM.on('change', () => { this.updateStatusBar(); this.markUnsaved(); }); } },
+    
+    initDeepIntegrations: function() { 
+        const app = document.getElementById('editor-app'); 
+        const overlay = document.createElement('div'); 
+        overlay.className = 'absolute inset-0 bg-blue-500/20 border-2 border-blue-400 hidden z-50 flex items-center justify-center text-blue-200 text-xl font-bold backdrop-blur-sm pointer-events-none'; 
+        overlay.innerText = 'Drop folder to import'; 
+        overlay.id = 'drop-overlay'; 
+        app.appendChild(overlay); 
+        app.addEventListener('dragover', (e) => { e.preventDefault(); document.getElementById('drop-overlay').classList.remove('hidden'); }); 
+        app.addEventListener('dragleave', (e) => { e.preventDefault(); document.getElementById('drop-overlay').classList.add('hidden'); }); 
+        app.addEventListener('drop', (e) => { e.preventDefault(); document.getElementById('drop-overlay').classList.add('hidden'); this.handleDropImport(e); }); 
+        
+        const container = document.getElementById('editorContainer'); 
+        if(container && !document.getElementById('editor-status-bar')) { 
+            const sb = document.createElement('div'); 
+            sb.id = 'editor-status-bar'; 
+            sb.className = 'absolute bottom-0 left-0 right-0 bg-[#191a21] text-gray-500 text-[10px] px-2 py-1 flex justify-between border-t border-gray-800 z-20'; 
+            sb.innerHTML = `<div class="flex gap-4"><span id="sb-file">No file</span> <span id="sb-mode"></span></div> <span id="sb-cursor">Ln 1, Col 1</span>`; 
+            container.appendChild(sb); 
+        } 
+        
+        if(window.editorCM) { 
+            window.editorCM.on('cursorActivity', (cm) => { 
+                const pos = cm.getCursor(); 
+                const el = document.getElementById('sb-cursor'); 
+                if(el) el.textContent = `Ln ${pos.line + 1}, Col ${pos.ch + 1}`; 
+            }); 
+            window.editorCM.on('change', () => { 
+                this.updateStatusBar(); 
+                this.markUnsaved(); 
+            }); 
+        } 
+    },
+    
     setFieldValue: function(id, val) { const el = document.getElementById(id); if(el) el.value = val; },
     setCheckValue: function(id, val) { const el = document.getElementById(id); if(el) el.checked = val; },
     revokeBlobs: function() { this.state.blobs.forEach(url => URL.revokeObjectURL(url)); this.state.blobs = []; },
