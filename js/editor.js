@@ -1,4 +1,4 @@
-// --- MODULE: EDITOR 7.0 (Deep Testing, Recursive Export & Scaffold) ---
+// --- MODULE: EDITOR 7.1 (Robust Import Engine & Scaffold) ---
 
 window.Editor = {
     // State
@@ -13,13 +13,12 @@ window.Editor = {
         initialized: false,
         iconData: null,
         hasUnsavedChanges: false,
-        deepTestMode: false // false = Run App (Index.html), true = Run Component (Current File)
+        deepTestMode: false 
     },
 
     // --- Core Lifecycle ---
 
     open: function(appId = null) {
-        // Strict Rule: Editor only opens in Edit Mode
         if (window.systemMode !== 'edit') {
             if(window.notify) window.notify("Switch to EDIT MODE to use Code Studio", true);
             return;
@@ -64,217 +63,183 @@ window.Editor = {
         this.updateUnsavedIndicator();
     },
 
-    hasUnsavedChanges: function() {
-        return this.state.hasUnsavedChanges;
-    },
+    // --- Import Engine (MANUAL FIX APPLIED) ---
 
-    updateUnsavedIndicator: function() {
-        const nameInput = document.getElementById('inName');
-        if(!nameInput) return;
+    // 1. Trigger File Explorer for Folders
+    triggerFolderImport: function() {
+        // Always create a fresh input to avoid "change" event missing if same folder selected
+        const oldInput = document.getElementById('folderImportInput');
+        if(oldInput) oldInput.remove();
+
+        const input = document.createElement('input');
+        input.id = 'folderImportInput';
+        input.type = 'file';
+        // These 3 attributes are crucial for folder support across Chrome/Edge/Firefox
+        input.setAttribute('webkitdirectory', '');
+        input.setAttribute('directory', '');
+        input.setAttribute('multiple', '');
+        input.style.display = 'none';
         
-        if (this.state.hasUnsavedChanges) {
-            nameInput.classList.add('border-yellow-500');
-            nameInput.title = "Unsaved Changes";
-        } else {
-            nameInput.classList.remove('border-yellow-500');
-            nameInput.title = "";
-        }
+        input.onchange = (e) => this.handleInputImport(e);
+        document.body.appendChild(input);
+        
+        // Slight delay to ensure DOM update before click
+        setTimeout(() => input.click(), 50);
     },
 
-    markUnsaved: function() {
-        this.state.hasUnsavedChanges = true;
-        this.updateUnsavedIndicator();
+    // 2. Handle Input Change
+    handleInputImport: async function(e) {
+        const files = Array.from(e.target.files);
+        if(files.length === 0) return;
+        
+        if(window.notify) window.notify(`Reading ${files.length} items...`);
+
+        // Map File objects to our internal structure
+        // webkitRelativePath is strictly required for folders via Input
+        const batch = files.map(f => ({ 
+            entry: f, 
+            path: f.webkitRelativePath || f.name 
+        }));
+        
+        await this.processImportBatch(batch);
     },
 
-    // --- Deep Test Logic ---
-
-    toggleDeepTest: function() {
-        this.state.deepTestMode = !this.state.deepTestMode;
-        const btn = document.getElementById('btnDeepTest');
-        if(btn) {
-            if(this.state.deepTestMode) {
-                btn.classList.add('text-green-400', 'bg-green-400/10');
-                if(window.notify) window.notify("Deep Test ON: Running Active File");
-            } else {
-                btn.classList.remove('text-green-400', 'bg-green-400/10');
-                if(window.notify) window.notify("Deep Test OFF: Running Full App");
+    // 3. Handle Drag & Drop (Recursion Fixed)
+    handleDropImport: async function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const items = e.dataTransfer.items;
+        const entries = [];
+        
+        for (let i = 0; i < items.length; i++) {
+            // webkitGetAsEntry is the standard for modern drag-and-drop file access
+            const item = items[i].webkitGetAsEntry();
+            if (item) {
+                await this.scanEntryRecursive(item, "", entries);
             }
         }
-        this.refreshPreview();
-    },
-
-    // --- Loading & Saving ---
-
-    loadApp: async function(appId) {
-        let app = (typeof all !== 'undefined' ? all : []).find(x => x.id === appId);
-        if(window.dbOp) {
-            const dbApp = await window.dbOp('get', appId);
-            if(dbApp) app = dbApp; 
-        }
-
-        if(!app) return this.resetToEmpty();
-
-        this.setFieldValue('inName', app.name);
-        this.setFieldValue('inStack', app.stack || 'Development');
-        this.state.iconData = app.iconData || null;
-        this.updateIconPreview(this.state.iconData || app.iconUrl);
-        this.setCheckValue('chkFav', app.isFavorite || false);
-        this.setCheckValue('chkDesk', app.onDesktop || false);
         
-        this.state.files = JSON.parse(JSON.stringify(app.files || {}));
-        this.renderTree();
-
-        const entry = this.findEntryPoint();
-        if(entry) this.switchFile(entry);
-        else if (window.editorCM && app.html) window.editorCM.setValue(app.html);
-
-        this.state.hasUnsavedChanges = false;
-        this.updateUnsavedIndicator();
-        this.refreshPreview();
-    },
-
-    saveProject: async function() {
-        if(window.notify) window.notify("Saving...");
-        this.syncCurrentFile();
-        
-        let stack = document.getElementById('inStack').value;
-        if(stack === 'New Category') {
-            stack = prompt("Enter new category name:");
-            if(!stack) return;
-        }
-
-        const app = {
-            id: this.state.appId || crypto.randomUUID(),
-            name: document.getElementById('inName').value || "Untitled",
-            stack: stack,
-            iconData: this.state.iconData,
-            onDesktop: document.getElementById('chkDesk').checked,
-            isFavorite: document.getElementById('chkFav').checked,
-            files: this.state.files,
-            lastModified: Date.now()
-        };
-        
-        try {
-            if(window.dbPut) await window.dbPut(app);
-            this.state.appId = app.id;
-            this.state.hasUnsavedChanges = false;
-            this.updateUnsavedIndicator();
-            if(window.notify) window.notify("Saved Successfully!");
-            if(window.refreshApps) window.refreshApps();
-            document.getElementById('saveOptionsModal').classList.add('hidden');
-        } catch(e) { 
-            console.error(e);
-            if(window.notify) window.notify("Save Failed", true); 
+        if (entries.length > 0) {
+            await this.processImportBatch(entries);
         }
     },
 
-    // --- Recursive Zip Export ---
+    // 4. Robust Recursive Scanner (Loop Logic)
+    scanEntryRecursive: async function(entry, path, resultList) {
+        if (entry.isFile) {
+            return new Promise((resolve) => {
+                entry.file((file) => {
+                    // Combine path + filename, sanitize slashes
+                    const fullPath = (path + file.name).replace(/\/+/g, '/');
+                    resultList.push({ entry: file, path: fullPath });
+                    resolve();
+                });
+            });
+        } else if (entry.isDirectory) {
+            const reader = entry.createReader();
+            let entriesBatch = [];
+            
+            // "readEntries" returns a batch. We must loop until it returns 0.
+            const readBatch = async () => {
+                return new Promise((resolve, reject) => {
+                    reader.readEntries(resolve, reject);
+                });
+            };
 
-    downloadZip: async function() {
-        if(!window.JSZip) return window.notify("JSZip missing", true);
-        const zip = new JSZip();
-        const files = this.state.files;
+            try {
+                // Loop to get ALL files in directory, not just first 100
+                do {
+                    entriesBatch = await readBatch();
+                    const promises = entriesBatch.map(child => 
+                        this.scanEntryRecursive(child, path + entry.name + "/", resultList)
+                    );
+                    await Promise.all(promises);
+                } while (entriesBatch.length > 0);
+            } catch (err) {
+                console.warn("Dir read error:", err);
+            }
+        }
+    },
+
+    // 5. The Batch Processor (System File Filter)
+    processImportBatch: async function(fileObjects) {
+        if(window.notify) window.notify(`Processing ${fileObjects.length} files...`);
         
-        // Robust Path Handling:
-        // The VFS keys are already relative paths like "css/style.css" or "src/components/Button.js"
-        // JSZip handles creating the folders automatically based on these paths.
-        
-        Object.keys(files).forEach(path => {
-            const file = files[path];
-            // If it's binary blob, we pass it directly. If text string, pass string.
-            zip.file(path, file.content);
+        // A. Filter Junk Files FIRST
+        const validFiles = fileObjects.filter(f => {
+            const p = f.path;
+            // Filter Mac/Windows system files and hidden configs
+            if (p.includes('__MACOSX') || p.includes('.DS_Store') || p.includes('Desktop.ini') || p.includes('Thumbs.db')) return false;
+            if (p.includes('.git/') || p.includes('node_modules/')) return false;
+            return true;
         });
 
-        const blob = await zip.generateAsync({type:"blob"});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = (document.getElementById('inName').value || "project") + ".zip";
-        a.click();
-    },
+        if (validFiles.length === 0) {
+            if(window.notify) window.notify("No valid source files found.", true);
+            return;
+        }
 
-    // --- File Ops ---
-
-    switchFile: function(path) {
-        this.syncCurrentFile();
-        this.state.activeFilePath = path;
-        const file = this.state.files[path];
-        if(!file) return;
+        // B. Root Detection Logic
+        // If I drag "MyProject", paths are "MyProject/src/..."
+        // We want to detect "MyProject/" and strip it, but use "MyProject" as the App Name.
+        const firstPath = validFiles[0].path;
+        const rootMatch = firstPath.match(/^([^/]+)\//);
+        let rootPrefix = "";
         
-        const isImage = this.isBinaryFile(path);
-        const isSvg = path.toLowerCase().endsWith('.svg');
-        this.toggleImagePreview(isImage || isSvg, file);
+        if (rootMatch) {
+            const potentialRoot = rootMatch[1];
+            // Verify ALL files start with this root
+            const allMatch = validFiles.every(f => f.path.startsWith(potentialRoot + "/"));
+            if (allMatch) {
+                rootPrefix = potentialRoot + "/";
+                this.setFieldValue('inName', potentialRoot); // Set App Name to Folder Name
+            }
+        }
 
-        if (!isImage && window.editorCM) {
-            if(isSvg) this.toggleImagePreview(false, null);
-            window.editorCM.setValue(file.content || "");
-            window.editorCM.setOption('readOnly', false);
-            window.editorCM.clearHistory();
+        const newVFS = {};
+        const textExtensions = new Set(['js','jsx','ts','tsx','html','css','scss','json','md','txt','svg','xml','gitignore','env']);
+
+        const promises = validFiles.map(async (f) => {
+            const rawPath = f.path;
+            // Strip root prefix if it exists
+            let finalPath = rawPath.startsWith(rootPrefix) ? rawPath.slice(rootPrefix.length) : rawPath;
+            finalPath = window.normalizePath(finalPath);
             
-            const ext = path.split('.').pop().toLowerCase();
-            const modeMap = { 
-                'js': 'javascript', 'jsx': 'jsx', 'ts': 'text/typescript',
-                'html': 'htmlmixed', 'css': 'css', 'json': 'application/json', 
-                'md': 'markdown', 'xml': 'xml', 'svg': 'xml'
-            };
-            window.editorCM.setOption('mode', modeMap[ext] || 'htmlmixed');
-            
-            const modeDisplay = document.getElementById('sb-mode');
-            if(modeDisplay) modeDisplay.textContent = modeMap[ext] || 'text';
-        }
-        this.highlightActiveFile(path);
-        this.updateStatusBar();
-        if(this.state.deepTestMode) this.refreshPreview(); 
-    },
+            if (!finalPath) return; // Skip empty paths
 
-    refreshPreview: function() {
-        const frame = document.getElementById('editorPreviewFrame');
-        if(!frame) return;
-        this.syncCurrentFile();
+            const ext = finalPath.split('.').pop().toLowerCase();
+            const isText = textExtensions.has(ext);
+
+            try {
+                if (isText) {
+                    const text = await f.entry.text();
+                    newVFS[finalPath] = { content: text, type: 'text' };
+                } else {
+                    newVFS[finalPath] = { content: f.entry, type: 'blob' };
+                }
+            } catch (e) {
+                console.warn("Failed to read file:", finalPath);
+            }
+        });
+
+        await Promise.all(promises);
+
+        // C. Merge
+        this.state.files = { ...this.state.files, ...newVFS };
         
-        let filesToRun = this.state.files;
-        let entryPoint = null;
-
-        if (this.state.deepTestMode && this.state.activeFilePath) {
-            entryPoint = this.state.activeFilePath;
-        }
-
-        if(Object.keys(filesToRun).length === 0) return;
-
-        if(window.WindowManager && window.WindowManager.launchApp) {
-            window.WindowManager.launchApp({ name: "Preview", files: filesToRun }, entryPoint)
-                .then(html => { frame.srcdoc = html; });
-        }
-        
-        const appName = document.getElementById('inName').value || "App";
-        const urlBar = document.getElementById('previewUrlBar');
-        if(urlBar) urlBar.textContent = `local://${appName.toLowerCase().replace(/\s/g,'-')}/${this.state.activeFilePath||''}`;
-    },
-
-    // --- Standard Utils ---
-    
-    resetToEmpty: function() {
-        this.state.appId = crypto.randomUUID();
-        this.state.iconData = null;
-        this.updateIconPreview(null);
-        this.state.files = {
-            'index.html': { content: '<!DOCTYPE html>\n<html>\n<head>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <h1>New Project</h1>\n  <script src="app.js"></script>\n</body>\n</html>', type: 'text' },
-            'style.css': { content: 'body { background: #111; color: white; font-family: sans-serif; }', type: 'text' },
-            'app.js': { content: 'console.log("Hello World");', type: 'text' }
-        };
-        this.state.activeFilePath = 'index.html';
-        this.setFieldValue('inName', "Untitled Project");
-        this.setFieldValue('inStack', "Development");
+        // D. Update UI
         this.renderTree();
-        if(window.editorCM) window.editorCM.setValue(this.state.files['index.html'].content);
+        const index = this.findEntryPoint();
+        if(index) this.switchFile(index);
         
-        // Auto-show scaffold for completely new empty projects
-        setTimeout(() => this.toggleScaffold(), 300);
-        
-        this.state.hasUnsavedChanges = false;
+        if(window.notify) window.notify("Import Successful");
         this.refreshPreview();
+        this.markUnsaved();
     },
 
-    // --- Scaffold Generator (Preserved & Integrated) ---
+    // --- Scaffold Generator (Preserved) ---
+    
     toggleScaffold: function() { document.getElementById('scaffoldModal').classList.toggle('hidden'); },
     
     loadScaffoldPreset: function(val) {
@@ -346,6 +311,143 @@ window.Editor = {
         return root;
     },
 
+    // --- Recursive Zip Export ---
+
+    downloadZip: async function() {
+        if(!window.JSZip) return window.notify("JSZip missing", true);
+        const zip = new JSZip();
+        const files = this.state.files;
+        Object.keys(files).forEach(path => zip.file(path, files[path].content));
+        const blob = await zip.generateAsync({type:"blob"});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = (document.getElementById('inName').value || "project") + ".zip";
+        a.click();
+    },
+
+    // --- Loading & Saving ---
+
+    loadApp: async function(appId) {
+        let app = (typeof all !== 'undefined' ? all : []).find(x => x.id === appId);
+        if(window.dbOp) {
+            const dbApp = await window.dbOp('get', appId);
+            if(dbApp) app = dbApp; 
+        }
+
+        if(!app) return this.resetToEmpty();
+
+        this.setFieldValue('inName', app.name);
+        this.setFieldValue('inStack', app.stack || 'Development');
+        this.state.iconData = app.iconData || null;
+        this.updateIconPreview(this.state.iconData || app.iconUrl);
+        this.setCheckValue('chkFav', app.isFavorite || false);
+        this.setCheckValue('chkDesk', app.onDesktop || false);
+        
+        this.state.files = JSON.parse(JSON.stringify(app.files || {}));
+        this.renderTree();
+
+        const entry = this.findEntryPoint();
+        if(entry) this.switchFile(entry);
+        else if (window.editorCM && app.html) window.editorCM.setValue(app.html);
+
+        this.state.hasUnsavedChanges = false;
+        this.updateUnsavedIndicator();
+        this.refreshPreview();
+    },
+
+    saveProject: async function() {
+        if(window.notify) window.notify("Saving...");
+        this.syncCurrentFile();
+        
+        let stack = document.getElementById('inStack').value;
+        if(stack === 'New Category') {
+            stack = prompt("Enter new category name:");
+            if(!stack) return;
+        }
+
+        const app = {
+            id: this.state.appId || crypto.randomUUID(),
+            name: document.getElementById('inName').value || "Untitled",
+            stack: stack,
+            iconData: this.state.iconData,
+            onDesktop: document.getElementById('chkDesk').checked,
+            isFavorite: document.getElementById('chkFav').checked,
+            files: this.state.files,
+            lastModified: Date.now()
+        };
+        
+        try {
+            if(window.dbPut) await window.dbPut(app);
+            this.state.appId = app.id;
+            this.state.hasUnsavedChanges = false;
+            this.updateUnsavedIndicator();
+            if(window.notify) window.notify("Saved Successfully!");
+            if(window.refreshApps) window.refreshApps();
+            document.getElementById('saveOptionsModal').classList.add('hidden');
+        } catch(e) { 
+            console.error(e);
+            if(window.notify) window.notify("Save Failed", true); 
+        }
+    },
+
+    // --- File Ops ---
+
+    switchFile: function(path) {
+        this.syncCurrentFile();
+        this.state.activeFilePath = path;
+        const file = this.state.files[path];
+        if(!file) return;
+        
+        const isImage = this.isBinaryFile(path);
+        const isSvg = path.toLowerCase().endsWith('.svg');
+        this.toggleImagePreview(isImage || isSvg, file);
+
+        if (!isImage && window.editorCM) {
+            if(isSvg) this.toggleImagePreview(false, null);
+            window.editorCM.setValue(file.content || "");
+            window.editorCM.setOption('readOnly', false);
+            window.editorCM.clearHistory();
+            
+            const ext = path.split('.').pop().toLowerCase();
+            const modeMap = { 
+                'js': 'javascript', 'jsx': 'jsx', 'ts': 'text/typescript',
+                'html': 'htmlmixed', 'css': 'css', 'json': 'application/json', 
+                'md': 'markdown', 'xml': 'xml', 'svg': 'xml'
+            };
+            window.editorCM.setOption('mode', modeMap[ext] || 'htmlmixed');
+            
+            const modeDisplay = document.getElementById('sb-mode');
+            if(modeDisplay) modeDisplay.textContent = modeMap[ext] || 'text';
+        }
+        this.highlightActiveFile(path);
+        this.updateStatusBar();
+        if(this.state.deepTestMode) this.refreshPreview(); 
+    },
+
+    refreshPreview: function() {
+        const frame = document.getElementById('editorPreviewFrame');
+        if(!frame) return;
+        this.syncCurrentFile();
+        
+        let filesToRun = this.state.files;
+        let entryPoint = null;
+
+        if (this.state.deepTestMode && this.state.activeFilePath) {
+            entryPoint = this.state.activeFilePath;
+        }
+
+        if(Object.keys(filesToRun).length === 0) return;
+
+        if(window.WindowManager && window.WindowManager.launchApp) {
+            window.WindowManager.launchApp({ name: "Preview", files: filesToRun }, entryPoint)
+                .then(html => { frame.srcdoc = html; });
+        }
+        
+        const appName = document.getElementById('inName').value || "App";
+        const urlBar = document.getElementById('previewUrlBar');
+        if(urlBar) urlBar.textContent = `local://${appName.toLowerCase().replace(/\s/g,'-')}/${this.state.activeFilePath||''}`;
+    },
+
     // --- Visualization ---
     renderTree: function() {
         const treeContainer = document.getElementById('fileTreeContent');
@@ -394,6 +496,26 @@ window.Editor = {
         });
     },
 
+    // --- Utils ---
+    resetToEmpty: function() {
+        this.state.appId = crypto.randomUUID();
+        this.state.iconData = null;
+        this.updateIconPreview(null);
+        this.state.files = {
+            'index.html': { content: '<!DOCTYPE html>\n<html>\n<head>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <h1>New Project</h1>\n  <script src="app.js"></script>\n</body>\n</html>', type: 'text' },
+            'style.css': { content: 'body { background: #111; color: white; font-family: sans-serif; }', type: 'text' },
+            'app.js': { content: 'console.log("Hello World");', type: 'text' }
+        };
+        this.state.activeFilePath = 'index.html';
+        this.setFieldValue('inName', "Untitled Project");
+        this.setFieldValue('inStack', "Development");
+        this.renderTree();
+        if(window.editorCM) window.editorCM.setValue(this.state.files['index.html'].content);
+        setTimeout(() => this.toggleScaffold(), 300);
+        this.state.hasUnsavedChanges = false;
+        this.refreshPreview();
+    },
+
     syncCurrentFile: function() {
         if (this.state.activeFilePath && this.state.files[this.state.activeFilePath]) {
             if(this.state.files[this.state.activeFilePath].type === 'text' && window.editorCM) {
@@ -406,18 +528,31 @@ window.Editor = {
         }
     },
 
-    // UI Toggles & Integrations
+    toggleDeepTest: function() {
+        this.state.deepTestMode = !this.state.deepTestMode;
+        const btn = document.getElementById('btnDeepTest');
+        if(btn) {
+            if(this.state.deepTestMode) {
+                btn.classList.add('text-green-400', 'bg-green-400/10');
+                if(window.notify) window.notify("Deep Test ON: Running Active File");
+            } else {
+                btn.classList.remove('text-green-400', 'bg-green-400/10');
+                if(window.notify) window.notify("Deep Test OFF: Running Full App");
+            }
+        }
+        this.refreshPreview();
+    },
+
+    hasUnsavedChanges: function() { return this.state.hasUnsavedChanges; },
+    markUnsaved: function() { this.state.hasUnsavedChanges = true; this.updateUnsavedIndicator(); },
+    updateUnsavedIndicator: function() { const nameInput = document.getElementById('inName'); if(!nameInput) return; if (this.state.hasUnsavedChanges) { nameInput.classList.add('border-yellow-500'); nameInput.title = "Unsaved Changes"; } else { nameInput.classList.remove('border-yellow-500'); nameInput.title = ""; } },
     updateStatusBar: function() { const fileEl = document.getElementById('sb-file'); if(fileEl) fileEl.textContent = this.state.activeFilePath || 'No file'; },
     highlightActiveFile: function(path) { document.querySelectorAll('[id^="file-item-"]').forEach(el => el.classList.remove('bg-blue-900/40', 'text-blue-400')); const activeEl = document.getElementById(`file-item-${path.replace(/[^a-zA-Z0-9]/g, '-')}`); if(activeEl) activeEl.classList.add('bg-blue-900/40', 'text-blue-400'); },
     setLayout: function(mode) { this.state.mode = mode; const container = document.getElementById('editorContainer'); const preview = document.getElementById('editorPreviewPane'); const btns = ['btnViewCode', 'btnViewSplit', 'btnViewPreview']; btns.forEach(b => { const el = document.getElementById(b); if(el) el.classList.remove('text-white', 'bg-white/10'); }); const activeBtn = mode === 'code' ? 'btnViewCode' : mode === 'preview' ? 'btnViewPreview' : 'btnViewSplit'; const el = document.getElementById(activeBtn); if(el) el.classList.add('text-white', 'bg-white/10'); container.classList.remove('hidden', 'w-full', 'w-1/2'); preview.classList.remove('hidden', 'w-full', 'w-1/2'); if (mode === 'code') { container.classList.add('w-full'); preview.classList.add('hidden'); } else if (mode === 'preview') { container.classList.add('hidden'); preview.classList.add('w-full'); this.refreshPreview(); } else { container.classList.add('w-1/2'); preview.classList.add('w-1/2'); this.refreshPreview(); } if(window.editorCM) window.editorCM.refresh(); },
-    
     bindShortcuts: function() { window.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); this.toggleSaveOptions(); } }); },
     initDeepIntegrations: function() { const app = document.getElementById('editor-app'); const overlay = document.createElement('div'); overlay.className = 'absolute inset-0 bg-blue-500/20 border-2 border-blue-400 hidden z-50 flex items-center justify-center text-blue-200 text-xl font-bold backdrop-blur-sm pointer-events-none'; overlay.innerText = 'Drop folder to import'; overlay.id = 'drop-overlay'; app.appendChild(overlay); app.addEventListener('dragover', (e) => { e.preventDefault(); document.getElementById('drop-overlay').classList.remove('hidden'); }); app.addEventListener('dragleave', (e) => { e.preventDefault(); document.getElementById('drop-overlay').classList.add('hidden'); }); app.addEventListener('drop', (e) => { e.preventDefault(); document.getElementById('drop-overlay').classList.add('hidden'); this.handleDropImport(e); }); const container = document.getElementById('editorContainer'); if(container && !document.getElementById('editor-status-bar')) { const sb = document.createElement('div'); sb.id = 'editor-status-bar'; sb.className = 'absolute bottom-0 left-0 right-0 bg-[#191a21] text-gray-500 text-[10px] px-2 py-1 flex justify-between border-t border-gray-800 z-20'; sb.innerHTML = `<div class="flex gap-4"><span id="sb-file">No file</span> <span id="sb-mode"></span></div> <span id="sb-cursor">Ln 1, Col 1</span>`; container.appendChild(sb); } if(window.editorCM) { window.editorCM.on('cursorActivity', (cm) => { const pos = cm.getCursor(); const el = document.getElementById('sb-cursor'); if(el) el.textContent = `Ln ${pos.line + 1}, Col ${pos.ch + 1}`; }); window.editorCM.on('change', () => { this.updateStatusBar(); this.markUnsaved(); }); } },
     setFieldValue: function(id, val) { const el = document.getElementById(id); if(el) el.value = val; },
     setCheckValue: function(id, val) { const el = document.getElementById(id); if(el) el.checked = val; },
-    handleDropImport: async function(e) { e.preventDefault(); e.stopPropagation(); const items = e.dataTransfer.items; const entries = []; for (let i = 0; i < items.length; i++) { const item = items[i].webkitGetAsEntry(); if (item) await this.scanEntryRecursive(item, "", entries); } if (entries.length > 0) await this.processImportBatch(entries); },
-    scanEntryRecursive: async function(entry, path, resultList) { if (entry.isFile) { return new Promise((resolve) => { entry.file((file) => { resultList.push({ entry: file, path: (path + file.name).replace(/\/+/g, '/') }); resolve(); }); }); } else if (entry.isDirectory) { const reader = entry.createReader(); const readEntries = async () => { const entries = await new Promise((res) => reader.readEntries(res)); if (entries.length === 0) return; const promises = entries.map(child => this.scanEntryRecursive(child, path + entry.name + "/", resultList)); await Promise.all(promises); await readEntries(); }; await readEntries(); } },
-    processImportBatch: async function(fileObjects) { if(window.notify) window.notify(`Importing ${fileObjects.length} files...`); const firstPath = fileObjects[0].path; const rootMatch = firstPath.match(/^([^/]+)\//); let rootPrefix = ""; if (rootMatch) { const potentialRoot = rootMatch[1]; const allMatch = fileObjects.every(f => f.path.startsWith(potentialRoot + "/")); if (allMatch) { rootPrefix = potentialRoot + "/"; this.setFieldValue('inName', potentialRoot); } } const newVFS = {}; const textExtensions = new Set(['js','jsx','ts','tsx','html','css','scss','json','md','txt','svg','xml','gitignore','env']); const promises = fileObjects.map(async (f) => { const rawPath = f.path; let finalPath = rawPath.startsWith(rootPrefix) ? rawPath.slice(rootPrefix.length) : rawPath; finalPath = window.normalizePath(finalPath); if(finalPath.includes('.git/') || finalPath.includes('node_modules/') || finalPath.startsWith('.')) return; const ext = finalPath.split('.').pop().toLowerCase(); const isText = textExtensions.has(ext); if (isText) { const text = await f.entry.text(); newVFS[finalPath] = { content: text, type: 'text' }; } else { newVFS[finalPath] = { content: f.entry, type: 'blob' }; } }); await Promise.all(promises); this.state.files = { ...this.state.files, ...newVFS }; this.renderTree(); const index = this.findEntryPoint(); if(index) this.switchFile(index); if(window.notify) window.notify("Import Complete"); this.refreshPreview(); this.markUnsaved(); },
     revokeBlobs: function() { this.state.blobs.forEach(url => URL.revokeObjectURL(url)); this.state.blobs = []; },
     getFileIcon: function(path) { if(path.endsWith('.js') || path.endsWith('.jsx')) return 'javascript'; if(path.endsWith('.css')) return 'css'; if(path.endsWith('.html')) return 'html'; if(path.endsWith('.json')) return 'data_object'; if(this.isBinaryFile(path)) return 'image'; return 'description'; },
     isBinaryFile: function(path) { return /\.(png|jpg|jpeg|gif|webp|ico|mp3|mp4|svg|ttf|woff)$/i.test(path); },
@@ -427,6 +562,5 @@ window.Editor = {
     updateIconPreview: function(src) { const previewEl = document.getElementById('iconPreviewImg'); const placeholder = document.getElementById('iconPlaceholder'); if(previewEl && placeholder) { if(src) { previewEl.src = src; previewEl.classList.remove('hidden'); placeholder.classList.add('hidden'); } else { previewEl.classList.add('hidden'); placeholder.classList.remove('hidden'); } } },
     triggerIconUpload: function() { let input = document.getElementById('iconUploadInput'); if(!input) { input = document.createElement('input'); input.id = 'iconUploadInput'; input.type = 'file'; input.accept = '.png,.jpg,.jpeg,.ico,.svg'; input.style.display = 'none'; input.onchange = (e) => this.handleIconFile(e); document.body.appendChild(input); } input.click(); },
     handleIconFile: function(e) { const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); reader.onload = (evt) => { this.state.iconData = evt.target.result; this.updateIconPreview(this.state.iconData); this.markUnsaved(); }; reader.readAsDataURL(file); },
-    triggerFolderImport: function() { let input = document.getElementById('folderImportInput'); if(!input) { input = document.createElement('input'); input.id = 'folderImportInput'; input.type = 'file'; input.webkitdirectory = true; input.directory = true; input.multiple = true; input.style.display = 'none'; input.onchange = (e) => this.handleInputImport(e); document.body.appendChild(input); } input.value = ''; input.click(); },
-    handleInputImport: async function(e) { const files = Array.from(e.target.files); if(files.length === 0) return; const batch = files.map(f => ({ entry: f, path: f.webkitRelativePath || f.name })); await this.processImportBatch(batch); }
+    toggleSaveOptions: function() { document.getElementById('saveOptionsModal').classList.toggle('hidden'); }
 };
