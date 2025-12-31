@@ -24,8 +24,12 @@ window.WindowManager = {
         // Only the Editor is allowed to run when systemMode is 'edit'
         if (window.systemMode === 'edit') {
             const isEditor = app.id === 'editor' || app.type === 'editor';
+            // [MODIFIED] Redirect to Editor if user tries to run non-editor app
             if (!isEditor) {
-                if(window.notify) window.notify("⚠️ Switch to RUNNER MODE to launch apps", true);
+                if(window.Editor) {
+                    window.Editor.open(app.id);
+                    if(window.notify) window.notify(`Opened "${app.name}" in Code Studio`);
+                }
                 return; // STOP: Block launch
             }
         }
