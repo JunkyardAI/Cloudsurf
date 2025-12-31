@@ -13,6 +13,10 @@ window.WindowManager = {
         window.addEventListener('mouseup', () => this.stopDrag());
         window.addEventListener('resize', () => this.recenterWindows());
         window.addEventListener('message', (e) => this.handleMessage(e));
+
+        // CLEANUP: Remove legacy HTML overlay to prevent ID conflicts
+        const legacyLauncher = document.getElementById('appLauncher');
+        if(legacyLauncher) legacyLauncher.remove();
     },
 
     // --- Window Spawning ---
@@ -21,21 +25,20 @@ window.WindowManager = {
         if (!app || !app.id) return;
 
         // [RULE] Launch Guard: Block user apps in Edit Mode
-        // Only the Editor is allowed to run when systemMode is 'edit'
         if (window.systemMode === 'edit') {
             const isEditor = app.id === 'editor' || app.type === 'editor';
-            // [MODIFIED] Redirect to Editor if user tries to run non-editor app
             if (!isEditor) {
                 if(window.Editor) {
                     window.Editor.open(app.id);
                     if(window.notify) window.notify(`Opened "${app.name}" in Code Studio`);
+                } else {
+                     console.warn("Editor module not loaded");
                 }
                 return; // STOP: Block launch
             }
         }
 
         // [RULE] Modal Hierarchy Check
-        // If a system modal is open, prevent opening new windows behind it
         if (window.isModalOpen && window.isModalOpen()) {
             const modal = document.querySelector('.active-modal');
             if (modal) {
@@ -67,6 +70,71 @@ window.WindowManager = {
         const winId = app.id;
         const win = document.createElement('div');
         win.id = `win-${winId}`;
+        
+        // Attach app data directly to DOM for robust context menu access
+        win.appData = app; 
+
+        // --- INTERNAL APP HANDLING (Finder) ---
+        // Renders directly to DOM (no iframe) for shared context and perfect centering
+        if (app.isInternal || app.id === 'finder') {
+            win.className = 'window absolute flex flex-col bg-[#1e1e1e] border border-gray-700 rounded-lg shadow-2xl overflow-hidden animate-popIn';
+            win.style.zIndex = this.zIndex;
+            
+            // STRICT CENTERING
+            win.style.width = app.width || '800px';
+            win.style.height = app.height || '500px';
+            win.style.left = '50%';
+            win.style.top = '50%';
+            win.style.transform = 'translate(-50%, -50%)';
+
+            win.innerHTML = `
+                <div class="h-9 bg-[#2d2d2d] border-b border-black flex items-center justify-between px-3 select-none" 
+                     onmousedown="WindowManager.startDrag(event, '${win.id}')"
+                     oncontextmenu="event.preventDefault(); event.stopPropagation(); window.showContextMenu(event, document.getElementById('${win.id}').appData)">
+                    <div class="flex items-center gap-2">
+                         <button onclick="WindowManager.close('${winId}')" class="window-close close-btn w-3 h-3 rounded-full bg-red-500 text-red-900 flex items-center justify-center font-bold text-[8px] opacity-75 hover:opacity-100">×</button>
+                         <span class="text-xs font-medium text-gray-400 pl-2 select-none">${app.name}</span>
+                    </div>
+                </div>
+                <div class="flex flex-col flex-1 bg-[#1a1b26] overflow-hidden">
+                     <div class="h-12 border-b border-gray-700 flex items-center px-4 gap-3 bg-[#15161e]">
+                         <span class="material-symbols-outlined text-gray-500">search</span>
+                         <input id="finderSearch" type="text" placeholder="Search apps..." class="bg-transparent border-none outline-none text-white text-sm w-full h-full placeholder-gray-600 focus:placeholder-gray-400">
+                     </div>
+                     <div class="flex flex-1 overflow-hidden">
+                         <div id="finderSidebar" class="w-48 bg-black/20 border-r border-gray-700 p-2 overflow-y-auto"></div>
+                         <div id="finderMain" class="flex-1 p-4 overflow-y-auto"></div>
+                     </div>
+                     <div class="h-8 bg-[#15161e] border-t border-gray-800 flex items-center px-4 justify-between text-[10px] text-gray-500 select-none">
+                        <span id="finderStatus">Ready</span>
+                        <span>Cloudstax OS</span>
+                     </div>
+                </div>
+            `;
+            
+            document.body.appendChild(win);
+            this.windows.set(winId, win);
+
+            // Trigger OS rendering into the new window
+            if(window.renderFinder) window.renderFinder();
+            
+            // Bind Search (Re-bind required since element is new)
+            const searchInput = win.querySelector('#finderSearch');
+            if(searchInput) {
+                setTimeout(() => searchInput.focus(), 50); // Slight delay for focus
+                searchInput.oninput = (e) => { 
+                    const val = e.target.value.toLowerCase(); 
+                    const gridItems = win.querySelectorAll('#finderMain .grid > div');
+                    gridItems.forEach(el => { 
+                        el.style.display = el.innerText.toLowerCase().includes(val) ? 'flex' : 'none'; 
+                    }); 
+                };
+            }
+            return;
+        }
+
+        // --- STANDARD APP HANDLING (Iframe) ---
+        
         win.className = 'window absolute flex flex-col bg-[#1e1e1e] border border-gray-700 rounded-lg shadow-2xl overflow-hidden animate-popIn';
         
         // Smart Positioning
@@ -85,11 +153,10 @@ window.WindowManager = {
         
         const iconHtml = await this.resolveAppIcon(app, "text-sm");
 
-        // Note: We attach the context menu event to the title bar
         win.innerHTML = `
             <div class="h-9 bg-[#2d2d2d] border-b border-black flex items-center justify-between px-3 select-none" 
                  onmousedown="WindowManager.startDrag(event, '${win.id}')"
-                 oncontextmenu="event.preventDefault(); event.stopPropagation(); window.showContextMenu(event, window.all.find(a=>a.id==='${app.id}'))">
+                 oncontextmenu="event.preventDefault(); event.stopPropagation(); window.showContextMenu(event, document.getElementById('${win.id}').appData)">
                 <div class="flex items-center gap-3">
                     <div class="flex gap-2 group">
                         <button onclick="WindowManager.close('${winId}')" class="window-close close-btn w-3 h-3 rounded-full bg-red-500 text-red-900 flex items-center justify-center font-bold text-[8px] opacity-75 group-hover:opacity-100">×</button>
@@ -118,13 +185,11 @@ window.WindowManager = {
 
         try {
             let fullApp = app;
-            // Fetch content if lazy loaded (dbOp might be async)
             if ((!app.files || Object.keys(app.files).length === 0) && window.dbOp) {
                 const dbApp = await window.dbOp('get', app.id);
                 if (dbApp) fullApp = dbApp;
             }
             
-            // Standard launch (no override)
             const htmlContent = await this.launchApp(fullApp);
             
             const frame = document.getElementById(`frame-${winId}`);
@@ -149,10 +214,8 @@ window.WindowManager = {
         }
     },
 
-    // --- Runtime Engine (Supports Deep Linking) ---
-
-    // overrideEntryPath: Optional path to a specific file to run instead of index.html
-    // Used by Editor's "Deep Test" mode
+    // --- Runtime Engine ---
+    
     launchApp: async function(app, overrideEntryPath = null) {
         if (app.url && (!app.files || Object.keys(app.files).length === 0)) {
             return `<script>window.location.href="${app.url}";<\/script>`;
@@ -161,7 +224,6 @@ window.WindowManager = {
         const files = app.files || {};
         const urlMap = {};
         
-        // 1. Create Blob URLs for all files
         for (const path in files) {
             const file = files[path];
             const mime = this.getMimeType(path);
@@ -176,12 +238,9 @@ window.WindowManager = {
 
         let indexContent = "";
         
-        // 2. Determine Entry Point
         if (overrideEntryPath && files[overrideEntryPath]) {
-            // DEEP TEST MODE: Use the specific file selected in Editor
             indexContent = files[overrideEntryPath].content;
         } else {
-            // STANDARD MODE: Find index.html
             const entryPoints = ['index.html', 'main.html', 'app.html'];
             let indexPath = Object.keys(files).find(k => entryPoints.includes(k.toLowerCase().split('/').pop()));
             
@@ -190,19 +249,15 @@ window.WindowManager = {
             else indexContent = `<h1>${window.esc(app.name)}</h1><p>No index.html found</p>`;
         }
 
-        // 3. Resolve Relative Links (Deep Linking Regex)
-        // Sort by length to ensure 'style.css' doesn't replace 'my-style.css'
         const paths = Object.keys(urlMap).sort((a,b) => b.length - a.length);
 
         paths.forEach(path => {
             const blobUrl = urlMap[path];
             const safePath = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            // Matches: href="./css/style.css", src="js/app.js", url('img/bg.png')
             const regex = new RegExp(`((href|src|action)=["']|url\\(["']?)((\\./|/)?${safePath})(["']?|\\))`, 'g');
             indexContent = indexContent.replace(regex, `$1${blobUrl}$5`);
         });
 
-        // 4. Inject System Bridge (Logging & Context Menu)
         const bridge = `
         <script>
         window.onerror = function(m,u,l){ window.parent.postMessage({type:'log',level:'error',message:m + ' (Line ' + l + ')'},'*'); };
@@ -210,7 +265,6 @@ window.WindowManager = {
         console.log = function(...a){ _log('info', a); };
         console.error = function(...a){ _log('error', a); };
         
-        // Pass right-clicks up to the OS for custom context menus
         window.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             window.parent.postMessage({ type: 'contextmenu', id: '${app.id}', x: e.clientX, y: e.clientY }, '*');
@@ -226,7 +280,6 @@ window.WindowManager = {
         return indexContent;
     },
 
-    // --- Message Handling (Bridge) ---
     handleMessage: function(e) {
         if (e.data && e.data.type === 'contextmenu') {
             const winId = e.data.id;
@@ -234,7 +287,7 @@ window.WindowManager = {
             if (win) {
                 const rect = win.getBoundingClientRect();
                 const screenX = rect.left + e.data.x;
-                const screenY = rect.top + e.data.y + 36; // +36 for titlebar offset
+                const screenY = rect.top + e.data.y + 36;
                 
                 if (window.showContextMenu) {
                     const app = (window.all || []).find(a => a.id === winId);
@@ -245,8 +298,6 @@ window.WindowManager = {
             }
         }
     },
-
-    // --- Standard Window Controls ---
 
     close: function(id) {
         const win = document.getElementById(`win-${id}`);
@@ -264,7 +315,10 @@ window.WindowManager = {
             win.classList.remove('minimized');
             win.style.pointerEvents = '';
             win.style.opacity = '';
-            win.style.transform = '';
+            
+            // NOTE: We do NOT restore transform here because startDrag handles the transition
+            // from centered (transform) to absolute (left/top) coordinates permanently.
+            
             if(win.dataset.maximized === 'true') { win.style.top = '0'; win.style.left = '0'; }
         }
     },
@@ -279,13 +333,41 @@ window.WindowManager = {
         const winId = id.startsWith('win-') || id === 'editor-app' ? id : `win-${id}`;
         const win = document.getElementById(winId);
         if (!win) return;
+
         if (win.dataset.maximized === 'true') {
-            win.style.top = win.dataset.prevTop; win.style.left = win.dataset.prevLeft; win.style.width = win.dataset.prevWidth; win.style.height = win.dataset.prevHeight;
-            win.dataset.maximized = 'false'; win.style.borderRadius = '0.5rem';
+            // Restore
+            win.style.top = win.dataset.prevTop; 
+            win.style.left = win.dataset.prevLeft; 
+            win.style.width = win.dataset.prevWidth; 
+            win.style.height = win.dataset.prevHeight;
+            
+            // Restore transform if it was saved (fix for centered windows flying off screen)
+            if (win.dataset.prevTransform) {
+                win.style.transform = win.dataset.prevTransform;
+                delete win.dataset.prevTransform;
+            }
+
+            win.dataset.maximized = 'false'; 
+            win.style.borderRadius = '0.5rem';
         } else {
-            win.dataset.prevTop = win.style.top; win.dataset.prevLeft = win.style.left; win.dataset.prevWidth = win.style.width; win.dataset.prevHeight = win.style.height;
-            win.style.top = '0'; win.style.left = '0'; win.style.width = '100%'; win.style.height = '100%'; 
-            win.dataset.maximized = 'true'; win.style.borderRadius = '0';
+            // Maximize
+            win.dataset.prevTop = win.style.top; 
+            win.dataset.prevLeft = win.style.left; 
+            win.dataset.prevWidth = win.style.width; 
+            win.dataset.prevHeight = win.style.height;
+            
+            // If window has transform (e.g. center), save it and clear it so left:0 top:0 works
+            if (win.style.transform && win.style.transform !== 'none') {
+                win.dataset.prevTransform = win.style.transform;
+                win.style.transform = 'none';
+            }
+
+            win.style.top = '0'; 
+            win.style.left = '0'; 
+            win.style.width = '100%'; 
+            win.style.height = '100%'; 
+            win.dataset.maximized = 'true'; 
+            win.style.borderRadius = '0';
         }
     },
 
@@ -326,16 +408,19 @@ window.WindowManager = {
     toggleLauncher: function() {
         if(window.isModalOpen && window.isModalOpen()) return; 
 
-        const l = document.getElementById('appLauncher');
-        if (l) {
-            l.classList.toggle('hidden');
-            if (!l.classList.contains('hidden')) {
-                this.zIndex++;
-                l.style.zIndex = this.zIndex + 10;
-                l.style.position = 'fixed'; l.style.left = '50%'; l.style.top = '50%'; l.style.transform = 'translate(-50%, -50%)';
-                l.style.width = '80vw'; l.style.maxWidth = '900px'; l.style.maxHeight = '80vh';
-                if (window.renderFinder) window.renderFinder();
-            }
+        // Managed Window Logic
+        if (this.windows.has('finder')) {
+            this.close('finder');
+        } else {
+            this.openApp({
+                id: 'finder',
+                name: 'Finder',
+                type: 'system',
+                iconUrl: 'folder_open', 
+                isInternal: true,
+                width: '800px',
+                height: '500px'
+            });
         }
     },
 
@@ -359,7 +444,30 @@ window.WindowManager = {
 
     getSavedState: function(id) { try { return JSON.parse(localStorage.getItem(WIN_STATE_KEY)||'{}')[id]; } catch { return null; } },
     saveState: function(id, rect) { try { const states = JSON.parse(localStorage.getItem(WIN_STATE_KEY)||'{}'); states[id] = rect; localStorage.setItem(WIN_STATE_KEY, JSON.stringify(states)); } catch {} },
-    startDrag: function(e, id) { if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return; const win = document.getElementById(id); if (!win || win.dataset.maximized === 'true') return; this.focusWindow(id); this.activeDrag = win; this.dragOffset = { x: e.clientX - win.offsetLeft, y: e.clientY - win.offsetTop }; document.querySelectorAll('iframe').forEach(f => f.style.pointerEvents = 'none'); },
+    
+    startDrag: function(e, id) { 
+        if (e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.tagName === 'INPUT') return; 
+        
+        const win = document.getElementById(id); 
+        if (!win || win.dataset.maximized === 'true') return; 
+        
+        this.focusWindow(id); 
+        this.activeDrag = win; 
+
+        // CRITICAL: If window is using CSS Transform for centering, convert to absolute pixels 
+        // to prevent "jumping" when dragging starts.
+        if (win.style.transform.includes('translate')) {
+            const rect = win.getBoundingClientRect();
+            win.style.transform = 'none';
+            // Set explicit pixel values based on current visual position
+            win.style.left = rect.left + 'px';
+            win.style.top = rect.top + 'px';
+        }
+
+        this.dragOffset = { x: e.clientX - win.offsetLeft, y: e.clientY - win.offsetTop }; 
+        document.querySelectorAll('iframe').forEach(f => f.style.pointerEvents = 'none'); 
+    },
+    
     onDrag: function(e) { if (!this.activeDrag) return; e.preventDefault(); this.activeDrag.style.left = (e.clientX - this.dragOffset.x) + 'px'; this.activeDrag.style.top = (e.clientY - this.dragOffset.y) + 'px'; },
     stopDrag: function() { if (this.activeDrag) { const win = this.activeDrag; this.saveState(win.id.replace('win-', ''), { x: win.style.left, y: win.style.top, w: win.style.width, h: win.style.height }); this.activeDrag = null; document.querySelectorAll('iframe').forEach(f => f.style.pointerEvents = 'auto'); } },
     getMimeType: function(path) { const ext = path.split('.').pop().toLowerCase(); return ({ 'js': 'text/javascript', 'jsx': 'text/javascript', 'css': 'text/css', 'html': 'text/html', 'json': 'application/json', 'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'svg': 'image/svg+xml', 'gif': 'image/gif', 'webp': 'image/webp', 'ico': 'image/x-icon' })[ext] || 'text/plain'; }
