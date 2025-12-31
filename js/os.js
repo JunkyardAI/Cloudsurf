@@ -4,7 +4,8 @@ window.all = [];
 window.bgAnimationPaused = false;
 window.settings = {
     use3DBackground: true,
-    wallpaper: null // can be base64 or blobUrl
+    wallpaper: null, // Data URI
+    bgSize: 'cover' // 'cover' or 'contain'
 };
 
 window.init = async function() {
@@ -13,11 +14,7 @@ window.init = async function() {
     // 1. Load Settings
     loadSettings();
 
-    // 2. Immediate Render (Fail-Safe)
-    window.renderDesktopIcons();
-    window.renderFinder();
-
-    // 3. Initialize Database
+    // 2. Initialize Database
     try {
         if (window.initDB) {
             await window.initDB();
@@ -27,10 +24,15 @@ window.init = async function() {
         console.error("DB Init Failed", e); 
     }
 
+    // 3. Initialize UI (Dock & Desktop)
+    initDock();
+    window.renderDesktopIcons();
+    window.renderFinder();
+
     // 4. Background
     initBackgroundSystem();
 
-    // 5. Global Listeners (Context Menu, etc)
+    // 5. Global Listeners
     setupGlobalListeners();
 
     // 6. Hide Boot Screen
@@ -52,7 +54,7 @@ function loadSettings() {
 
 function saveSettings() {
     localStorage.setItem('cloudstax_settings', JSON.stringify(window.settings));
-    initBackgroundSystem(); // Refresh background
+    initBackgroundSystem();
 }
 
 // --- Background System ---
@@ -60,84 +62,57 @@ function initBackgroundSystem() {
     const canvas = document.getElementById('bg-canvas');
     const bgContainer = document.getElementById('desktop-bg-container') || document.body;
 
-    // A. Custom Wallpaper (Highest Priority)
+    // A. Custom Wallpaper (Priority)
     if (window.settings.wallpaper) {
         if(canvas) canvas.style.display = 'none';
         bgContainer.style.backgroundImage = `url('${window.settings.wallpaper}')`;
-        bgContainer.style.backgroundSize = 'cover';
+        bgContainer.style.backgroundSize = window.settings.bgSize || 'cover';
         bgContainer.style.backgroundPosition = 'center';
+        bgContainer.style.backgroundRepeat = 'no-repeat';
         window.bgAnimationPaused = true;
         return;
     }
 
     // B. 3D Background
-    bgContainer.style.backgroundImage = ''; // Reset
+    bgContainer.style.backgroundImage = ''; 
     if (window.settings.use3DBackground) {
         if(canvas) canvas.style.display = 'block';
         window.bgAnimationPaused = false;
         initThreeJSBackground();
     } else {
-        // C. Simple Black/Dark Background (Saver Mode)
+        // C. Efficiency Mode (Black)
         if(canvas) canvas.style.display = 'none';
         bgContainer.style.backgroundColor = '#111';
         window.bgAnimationPaused = true;
     }
 }
 
-// --- App Management ---
+// --- Dock & Desktop Management ---
 
-window.refreshApps = async function() {
-    if (window.dbOp) {
-        try {
-            window.all = await window.dbOp('get') || [];
-        } catch(e) { 
-            console.warn("DB Read Error", e);
-            window.all = [];
-        }
-    }
-    window.renderDesktopIcons();
-    window.renderFinder();
-};
+function initDock() {
+    // 1. Clear Dock first (optional, but safer)
+    const dock = document.getElementById('dock-apps');
+    if(dock) dock.innerHTML = '';
+
+    // 2. Add System Apps to Dock PERMANENTLY
+    const systemApps = [
+        { id: 'finder', name: 'Finder', iconUrl: 'folder_open', type: 'system', action: () => WindowManager.toggleLauncher() },
+        { id: 'editor', name: 'Code Studio', iconUrl: 'terminal', type: 'editor', action: () => { if(window.Editor && window.Editor.open) window.Editor.open(); } },
+        { id: 'settings', name: 'Settings', iconUrl: 'settings', type: 'system', action: () => openSettingsModal() }
+    ];
+
+    systemApps.forEach(app => WindowManager.addToDock(app));
+}
 
 window.renderDesktopIcons = async function() {
     const desktop = document.getElementById('desktop-icons');
     if (!desktop) return;
     desktop.innerHTML = '';
 
-    // 1. SYSTEM APPS
-    const systemApps = [
-        {
-            id: 'editor',
-            name: 'Code Studio',
-            iconUrl: 'terminal',
-            type: 'editor',
-            action: () => { if(window.Editor && window.Editor.open) window.Editor.open(); }
-        },
-        {
-            id: 'finder',
-            name: 'Finder',
-            iconUrl: 'folder_open',
-            type: 'system',
-            action: () => WindowManager.toggleLauncher()
-        },
-        {
-            id: 'settings',
-            name: 'Settings',
-            iconUrl: 'settings',
-            type: 'system',
-            action: () => openSettingsModal()
-        }
-    ];
+    // Filter: Only show User Apps that are marked for desktop (No System Apps)
+    const desktopApps = window.all.filter(app => app.onDesktop && app.type !== 'system');
 
-    systemApps.forEach(app => {
-        const el = createIconElement(app);
-        el.onclick = app.action;
-        desktop.appendChild(el);
-    });
-
-    // 2. USER APPS
-    for (const app of window.all.filter(app => app.onDesktop)) {
-        // Use WindowManager to resolve custom icons (async)
+    for (const app of desktopApps) {
         let iconHtml = window.renderIconHtml(app.iconUrl, "text-2xl");
         if (WindowManager.resolveAppIcon) {
             iconHtml = await WindowManager.resolveAppIcon(app, "text-2xl");
@@ -146,7 +121,7 @@ window.renderDesktopIcons = async function() {
         const el = document.createElement('div');
         el.className = "flex flex-col items-center gap-2 p-2 rounded cursor-pointer group w-[90px] select-none";
         el.innerHTML = `
-            <div class="w-12 h-12 bg-gray-800/80 rounded-xl flex items-center justify-center text-white shadow-lg border border-white/10 group-hover:scale-105 transition-transform overflow-hidden">
+            <div class="w-12 h-12 bg-gray-800/80 rounded-xl flex items-center justify-center text-white shadow-lg border border-white/10 group-hover:scale-105 transition-transform overflow-hidden relative">
                 ${iconHtml}
             </div>
             <span class="text-xs text-center text-gray-200 font-medium drop-shadow-md truncate w-full px-1 bg-black/50 rounded">${window.esc(app.name)}</span>
@@ -162,33 +137,32 @@ window.renderDesktopIcons = async function() {
     }
 };
 
-function createIconElement(app) {
-    const el = document.createElement('div');
-    el.className = "flex flex-col items-center gap-2 p-2 rounded cursor-pointer group w-[90px] select-none";
-    el.innerHTML = `
-        <div class="w-12 h-12 bg-gray-800/80 rounded-xl flex items-center justify-center text-white shadow-lg border border-white/10 group-hover:scale-105 transition-transform">
-            ${window.renderIconHtml(app.iconUrl, "text-2xl")}
-        </div>
-        <span class="text-xs text-center text-gray-200 font-medium drop-shadow-md truncate w-full px-1 bg-black/50 rounded">${window.esc(app.name)}</span>
-    `;
-    return el;
-}
-
 // --- Finder / Launcher ---
+
+window.refreshApps = async function() {
+    if (window.dbOp) {
+        try {
+            window.all = await window.dbOp('get') || [];
+        } catch(e) { 
+            console.warn("DB Read Error", e);
+            window.all = [];
+        }
+    }
+    window.renderDesktopIcons();
+    window.renderFinder();
+};
 
 window.renderFinder = function() {
     const finderMain = document.getElementById('finderMain');
     const finderSide = document.getElementById('finderSidebar');
     if (!finderMain || !finderSide) return;
 
-    finderMain.innerHTML = '';
+    // Keep Sidebar Clean
+    finderSide.innerHTML = `<div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-2 mb-2 mt-2">Categories</div>`;
     
-    // Aggregate Stacks
     const stacks = new Set(['All']);
     window.all.forEach(app => { if(app.stack) stacks.add(app.stack); });
 
-    finderSide.innerHTML = `<div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-2 mb-2 mt-2">Categories</div>`;
-    
     stacks.forEach(s => {
         const item = document.createElement('div');
         item.className = 'px-3 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded cursor-pointer truncate';
@@ -214,11 +188,17 @@ window.filterFinder = function(stack) {
         const el = document.createElement('div');
         el.className = "flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-gray-800 cursor-pointer transition select-none";
         el.innerHTML = `
-            <div class="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center text-white overflow-hidden">
-                ${window.renderIconHtml(app.iconUrl, "text-xl")}
+            <div class="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center text-white overflow-hidden relative">
+                ${window.renderIconHtml(app.iconUrl, "text-xl")} <!-- Placeholder, async update not strictly needed for launcher speed, but good to have -->
             </div>
             <span class="text-xs text-gray-300 text-center truncate w-full">${window.esc(app.name)}</span>
         `;
+        
+        // Async Icon Update
+        WindowManager.resolveAppIcon(app, "text-xl").then(html => {
+            el.querySelector('.w-10').innerHTML = html;
+        });
+
         el.onclick = () => {
             WindowManager.openApp(app);
             WindowManager.toggleLauncher(); 
@@ -236,17 +216,27 @@ window.filterFinder = function(stack) {
     if(status) status.innerText = `${apps.length} apps in ${stack}`;
 };
 
-// --- Context Menu Logic ---
+// --- Context Menu Logic (Fixed) ---
 window.showContextMenu = function(e, app) {
-    // Remove existing
-    window.hideContextMenu();
+    window.hideContextMenu(); // Close any open ones
 
     const menu = document.createElement('div');
     menu.id = 'contextMenu';
+    // Fixed: High z-index to ensure visibility
     menu.className = "fixed bg-[#2d2d2d] border border-gray-700 rounded-lg shadow-2xl py-1 z-[999999] min-w-[160px] animate-popIn flex flex-col";
     
     const onDesk = app.onDesktop;
+    const isSystem = app.type === 'system' || app.id === 'cloudstax-core';
     
+    let deleteOption = '';
+    if (!isSystem) {
+        deleteOption = `
+        <div class="h-px bg-gray-700 my-1"></div>
+        <div onclick="window.deleteApp('${app.id}'); window.hideContextMenu()" class="px-4 py-2 hover:bg-red-900 cursor-pointer text-xs text-red-300 flex items-center gap-2">
+            <span class="material-symbols-outlined text-sm">delete</span> Delete
+        </div>`;
+    }
+
     menu.innerHTML = `
         <div onclick="WindowManager.openApp(window.all.find(a=>a.id==='${app.id}')); window.hideContextMenu()" class="px-4 py-2 hover:bg-blue-600 cursor-pointer text-xs text-gray-200 flex items-center gap-2">
             <span class="material-symbols-outlined text-sm">open_in_new</span> Open
@@ -257,10 +247,7 @@ window.showContextMenu = function(e, app) {
         <div onclick="if(window.Editor) window.Editor.open('${app.id}'); window.hideContextMenu()" class="px-4 py-2 hover:bg-blue-600 cursor-pointer text-xs text-gray-200 flex items-center gap-2">
             <span class="material-symbols-outlined text-sm">code</span> Edit Source
         </div>
-        <div class="h-px bg-gray-700 my-1"></div>
-        <div onclick="window.deleteApp('${app.id}'); window.hideContextMenu()" class="px-4 py-2 hover:bg-red-900 cursor-pointer text-xs text-red-300 flex items-center gap-2">
-            <span class="material-symbols-outlined text-sm">delete</span> Delete
-        </div>
+        ${deleteOption}
     `;
 
     document.body.appendChild(menu);
@@ -281,8 +268,6 @@ window.hideContextMenu = function() {
     if(menu) menu.remove();
 };
 
-// --- Operations ---
-
 window.toggleDesktop = async function(id) {
     const app = window.all.find(a => a.id === id);
     if(app) {
@@ -293,6 +278,12 @@ window.toggleDesktop = async function(id) {
 };
 
 window.deleteApp = async function(id) {
+    const app = window.all.find(a => a.id === id);
+    if(app && (app.type === 'system' || id === 'editor' || id === 'finder')) {
+        window.notify("Cannot delete system apps", true);
+        return;
+    }
+
     if(confirm("Permanently delete this app?")) {
         try {
             await window.dbOp('delete', id);
@@ -312,7 +303,6 @@ window.deleteApp = async function(id) {
 
 // --- Settings Modal ---
 window.openSettingsModal = function() {
-    // Center logic
     const w = 400;
     const x = (window.innerWidth - w) / 2;
     const y = 100;
@@ -323,6 +313,9 @@ window.openSettingsModal = function() {
     modal.style.top = y + 'px';
     modal.style.width = w + 'px';
     
+    const is3D = window.settings.use3DBackground;
+    const hasWall = !!window.settings.wallpaper;
+    
     modal.innerHTML = `
         <div class="flex justify-between items-center border-b border-gray-700 pb-2">
             <h3 class="text-white font-bold">System Settings</h3>
@@ -330,19 +323,35 @@ window.openSettingsModal = function() {
         </div>
         
         <div class="flex flex-col gap-2">
-            <label class="flex items-center justify-between text-gray-300 text-sm">
-                <span>Enable 3D Particles</span>
-                <input type="checkbox" id="set-3d" ${window.settings.use3DBackground && !window.settings.wallpaper ? 'checked' : ''} class="accent-blue-500">
-            </label>
-            <p class="text-[10px] text-gray-500">Disabling saves CPU usage.</p>
+            <div class="flex items-center justify-between">
+                <span class="text-gray-300 text-sm">3D Background</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="set-3d" ${is3D ? 'checked' : ''} class="sr-only peer">
+                    <div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+            </div>
+            <p class="text-[10px] text-gray-500">Active only when no wallpaper is set.</p>
         </div>
 
         <div class="border-t border-gray-700 my-2"></div>
 
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col gap-3">
             <h4 class="text-gray-300 text-sm">Custom Wallpaper</h4>
-            <input type="file" id="set-wall" accept="image/*" class="text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-gray-700 file:text-white">
-            <button onclick="clearWallpaper()" class="text-xs text-red-400 text-left hover:underline">Reset to Default</button>
+            
+            <div class="flex gap-2">
+                <input type="file" id="set-wall" accept="image/*" class="hidden">
+                <button onclick="document.getElementById('set-wall').click()" class="px-3 py-1 bg-gray-700 text-white text-xs rounded hover:bg-gray-600">
+                    Upload Image
+                </button>
+                <button onclick="clearWallpaper()" class="px-3 py-1 bg-red-900/50 text-red-200 text-xs rounded hover:bg-red-900">
+                    Reset
+                </button>
+            </div>
+
+             <div class="flex items-center gap-4 text-xs text-gray-400">
+                <label><input type="radio" name="bgSize" value="cover" ${window.settings.bgSize === 'cover' ? 'checked' : ''}> Cover</label>
+                <label><input type="radio" name="bgSize" value="contain" ${window.settings.bgSize === 'contain' ? 'checked' : ''}> Fit</label>
+            </div>
         </div>
     `;
     
@@ -351,9 +360,15 @@ window.openSettingsModal = function() {
     // Listeners
     modal.querySelector('#set-3d').onchange = (e) => {
         window.settings.use3DBackground = e.target.checked;
-        window.settings.wallpaper = null; // Disable wallpaper if toggling 3d
         saveSettings();
     };
+    
+    modal.querySelectorAll('input[name="bgSize"]').forEach(r => {
+        r.onchange = (e) => {
+            window.settings.bgSize = e.target.value;
+            saveSettings();
+        };
+    });
 
     modal.querySelector('#set-wall').onchange = (e) => {
         const file = e.target.files[0];
@@ -361,9 +376,8 @@ window.openSettingsModal = function() {
             const reader = new FileReader();
             reader.onload = (evt) => {
                 window.settings.wallpaper = evt.target.result;
-                window.settings.use3DBackground = false; // Disable 3D
                 saveSettings();
-                modal.remove(); // Close to show effect
+                modal.remove(); 
             };
             reader.readAsDataURL(file);
         }
@@ -372,26 +386,23 @@ window.openSettingsModal = function() {
 
 window.clearWallpaper = function() {
     window.settings.wallpaper = null;
-    window.settings.use3DBackground = true;
     saveSettings();
 };
 
 function setupGlobalListeners() {
-    // Close context menu on click anywhere else
+    // CRITICAL: Close context menu on any click outside
     document.addEventListener('click', (e) => {
         if(!e.target.closest('#contextMenu')) {
             window.hideContextMenu();
         }
-    });
+    }, true); // Capture phase to ensure it catches everything
 
-    // Launcher toggler
     const btn = document.getElementById('createNewAppBtn');
     if(btn) btn.onclick = () => {
         WindowManager.toggleLauncher();
         if(window.Editor && window.Editor.open) window.Editor.open();
     };
 
-    // Finder Search
     const search = document.getElementById('finderSearch');
     if(search) {
         search.oninput = (e) => {
@@ -405,7 +416,7 @@ function setupGlobalListeners() {
     }
 }
 
-// --- 3D Background Implementation ---
+// --- 3D Background ---
 function initThreeJSBackground() { 
     if(window.bgAnimationPaused) return; 
     const cvs = document.getElementById('bg-canvas'); 
