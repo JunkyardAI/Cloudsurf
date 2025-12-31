@@ -1,9 +1,13 @@
-// --- MODULE: OS (Shell & Desktop) v7.0 - Modes & Strict Rules ---
+// --- MODULE: OS (Shell & Desktop) v7.2 - Smart Rules & Integrity ---
 
 window.all = []; 
 window.bgAnimationPaused = false;
 window.systemMode = 'runner'; // 'runner' (Presentation) or 'edit' (Development)
 window.modalStack = []; // Track open modals to enforce hierarchy
+
+// --- SMART RULES CONFIG ---
+const SYSTEM_PROTECTED_APPS = ['finder', 'settings', 'editor', 'cloudstax-core', 'system'];
+const MODAL_IDS = ['settings-modal', 'scaffoldModal', 'saveOptionsModal', 'alert-modal'];
 
 window.settings = {
     use3DBackground: true,
@@ -29,34 +33,50 @@ window.init = async function() {
     window.renderFinder();
     initBackgroundSystem();
     setupGlobalListeners();
-    renderModeToggle(); // New UI element
+    renderModeToggle(); 
 
-    // 3. Remove Boot Screen
+    // 3. Smart Rule: Boot Check
+    performBootCheck();
+
+    // 4. Remove Boot Screen
     const boot = document.getElementById('boot-screen');
     if (boot) { setTimeout(() => { boot.style.opacity = '0'; setTimeout(() => boot.remove(), 500); }, 500); }
 };
 
-// --- Strict Mode System ---
+// --- RULE: Boot Integrity Check ---
+function performBootCheck() {
+    // Clean up ghost windows that might remain from hot-reloads
+    const ghosts = document.querySelectorAll('[id^="win-"]');
+    ghosts.forEach(g => {
+        const id = g.id.replace('win-', '');
+        if (window.WindowManager && !window.WindowManager.windows.has(id)) {
+            g.remove();
+        }
+    });
+    
+    // Ensure system apps exist in DB or Memory
+    // (Logic handled in renderDesktopIcons/initDock filters)
+}
+
+// --- RULE: Strict Mode Switching ---
 
 window.toggleSystemMode = function() {
-   // [MANUAL RULE START] Prevent leaving Edit Mode if Editor is open
+    // [RULE] Cannot leave Edit Mode if Editor is open or has unsaved changes
     if (window.systemMode === 'edit') {
-        const editorApp = document.getElementById('editor-app');
-        // Check if editor exists and is NOT hidden
-        if (editorApp && !editorApp.classList.contains('hidden')) {
-            if(window.notify) window.notify("Close Code Studio before switching modes", true);
-            // Optional: Shake the window or focus it to show the user
+        // 1. Check for Unsaved Changes
+        if (window.Editor && window.Editor.hasUnsavedChanges && window.Editor.hasUnsavedChanges()) {
+            if(window.notify) window.notify("⚠️ Save changes in Code Studio first!", true);
             if(window.WindowManager) window.WindowManager.focusWindow('editor-app');
-            return; // STOP: Do not switch modes
+            return;
         }
-    }
-    // [MANUAL RULE END]
-    
-    // Rule: Cannot switch if Editor has unsaved changes
-    if (window.Editor && window.Editor.hasUnsavedChanges && window.Editor.hasUnsavedChanges()) {
-        if(window.notify) window.notify("Save changes in Editor first!", true);
-        if(window.WindowManager) window.WindowManager.focusWindow('editor-app');
-        return;
+
+        // 2. Check if Editor Window is Visible
+        const editorApp = document.getElementById('editor-app');
+        if (editorApp && !editorApp.classList.contains('hidden')) {
+            if(window.notify) window.notify("⚠️ Close Code Studio before switching modes", true);
+            if(window.WindowManager) window.WindowManager.focusWindow('editor-app');
+            return; 
+        }
     }
 
     window.systemMode = window.systemMode === 'runner' ? 'edit' : 'runner';
@@ -67,16 +87,8 @@ window.toggleSystemMode = function() {
     
     // UI Updates
     renderModeToggle();
-    initDock(); // Re-render dock (hides Editor in runner mode)
-    window.renderDesktopIcons(); // Updates context menu capability
-    
-    // Force close Editor if switching to Runner
-    if (window.systemMode === 'runner') {
-        const editorWin = document.getElementById('editor-app');
-        if (editorWin && !editorWin.classList.contains('hidden')) {
-            editorWin.classList.add('hidden');
-        }
-    }
+    initDock(); 
+    window.renderDesktopIcons();
 };
 
 function renderModeToggle() {
@@ -90,21 +102,22 @@ function renderModeToggle() {
     }
 
     if (window.systemMode === 'edit') {
-        btn.className = "fixed top-4 left-1/2 -translate-x-1/2 z-[99999] px-4 py-2 rounded-full shadow-[0_0_15px_rgba(59,130,246,0.5)] bg-blue-600 text-white font-bold text-xs cursor-pointer transition-all flex items-center gap-2 border border-blue-400 select-none";
+        btn.className = "fixed top-4 left-1/2 -translate-x-1/2 z-[99999] px-4 py-2 rounded-full shadow-[0_0_15px_rgba(59,130,246,0.5)] bg-blue-600 text-white font-bold text-xs cursor-pointer transition-all flex items-center gap-2 border border-blue-400 select-none hover:bg-blue-500";
         btn.innerHTML = `<span class="material-symbols-outlined text-sm">construction</span> EDIT MODE`;
     } else {
-        btn.className = "fixed top-4 left-1/2 -translate-x-1/2 z-[99999] px-4 py-2 rounded-full shadow-lg bg-gray-900/80 text-gray-400 font-bold text-xs cursor-pointer transition-all flex items-center gap-2 border border-gray-700 select-none hover:text-white";
+        btn.className = "fixed top-4 left-1/2 -translate-x-1/2 z-[99999] px-4 py-2 rounded-full shadow-lg bg-gray-900/80 text-gray-400 font-bold text-xs cursor-pointer transition-all flex items-center gap-2 border border-gray-700 select-none hover:text-white hover:border-gray-500";
         btn.innerHTML = `<span class="material-symbols-outlined text-sm">play_circle</span> RUNNER MODE`;
     }
 }
 
-// --- Hierarchy & Modal Rules ---
+// --- RULE: Hierarchy & Modal Enforcement ---
 
 window.isModalOpen = function() {
     return window.modalStack.length > 0;
 };
 
 window.pushModal = function(id) {
+    if (window.modalStack.includes(id)) return; // Prevent duplicates
     window.modalStack.push(id);
     const overlay = document.getElementById('modal-overlay') || createModalOverlay();
     overlay.classList.remove('hidden');
@@ -121,14 +134,19 @@ window.popModal = function() {
 function createModalOverlay() {
     const d = document.createElement('div');
     d.id = 'modal-overlay';
-    d.className = "fixed inset-0 bg-black/50 z-[9000] hidden backdrop-blur-[2px]";
-    // Clicking overlay shakes the active modal to indicate "Close me first"
+    d.className = "fixed inset-0 bg-black/60 z-[9000] hidden backdrop-blur-[2px] transition-opacity duration-200";
+    
+    // [RULE] Clicking overlay shakes the active modal
     d.onclick = () => {
-        const active = document.querySelector('.active-modal'); 
-        if(active) {
-            active.classList.add('animate-shake');
-            setTimeout(() => active.classList.remove('animate-shake'), 400);
-        }
+        // Find ANY active modal (generic selector)
+        const modals = document.querySelectorAll('.active-modal, .modal-window'); 
+        modals.forEach(m => {
+            if (!m.classList.contains('hidden')) {
+                m.classList.add('animate-shake');
+                setTimeout(() => m.classList.remove('animate-shake'), 400);
+            }
+        });
+        if(window.notify) window.notify("⚠️ Close the current window first", true);
     };
     document.body.appendChild(d);
     return d;
@@ -144,6 +162,11 @@ function saveSettings() { localStorage.setItem('cloudstax_settings', JSON.string
 function initBackgroundSystem() {
     const canvas = document.getElementById('bg-canvas');
     const bgContainer = document.getElementById('desktop-bg-container') || document.body;
+    
+    // Clear previous
+    bgContainer.style.backgroundImage = '';
+    bgContainer.style.backgroundColor = '';
+
     if (window.settings.wallpaper) {
         if(canvas) canvas.style.display = 'none';
         bgContainer.style.backgroundImage = `url('${window.settings.wallpaper}')`;
@@ -153,7 +176,7 @@ function initBackgroundSystem() {
         window.bgAnimationPaused = true;
         return;
     }
-    bgContainer.style.backgroundImage = ''; 
+    
     if (window.settings.use3DBackground) {
         if(canvas) canvas.style.display = 'block';
         window.bgAnimationPaused = false;
@@ -174,7 +197,7 @@ function initDock() {
         { id: 'settings', name: 'Settings', iconUrl: 'settings', type: 'system', action: () => openSettingsModal() }
     ];
 
-    // Editor is ONLY available in Edit Mode
+    // [RULE] Editor only in Edit Mode
     if (window.systemMode === 'edit') {
         systemApps.splice(1, 0, { id: 'editor', name: 'Code Studio', iconUrl: 'terminal', type: 'editor', action: () => { if(window.Editor && window.Editor.open) window.Editor.open(); } });
     }
@@ -187,8 +210,10 @@ window.renderDesktopIcons = async function() {
     if (!desktop) return;
     desktop.innerHTML = '';
     
-    // In Edit Mode, show ALL apps (to allow managing hidden ones). In Runner, show only onDesktop.
+    // [RULE] Filter logic based on mode
     let desktopApps = window.all.filter(app => app.type !== 'system');
+    
+    // In Runner: Only show pinned. In Edit: Show all (so you can pin them)
     if (window.systemMode === 'runner') {
         desktopApps = desktopApps.filter(app => app.onDesktop);
     }
@@ -198,11 +223,18 @@ window.renderDesktopIcons = async function() {
         if (WindowManager.resolveAppIcon) iconHtml = await WindowManager.resolveAppIcon(app, "text-2xl");
         const el = document.createElement('div');
         
-        // Visual cue for hidden apps in Edit Mode
+        // [RULE] Visual cue for hidden apps
         const opacity = (!app.onDesktop && window.systemMode === 'edit') ? 'opacity-50' : 'opacity-100';
-        
-        el.className = `flex flex-col items-center gap-2 p-2 rounded cursor-pointer group w-[90px] select-none ${opacity}`;
-        el.innerHTML = `<div class="w-12 h-12 bg-gray-800/80 rounded-xl flex items-center justify-center text-white shadow-lg border border-white/10 group-hover:scale-105 transition-transform overflow-hidden relative">${iconHtml}</div><span class="text-xs text-center text-gray-200 font-medium drop-shadow-md truncate w-full px-1 bg-black/50 rounded">${window.esc(app.name)}</span>`;
+        const indicator = (!app.onDesktop && window.systemMode === 'edit') ? `<div class="absolute top-0 right-0 w-2 h-2 bg-yellow-500 rounded-full border border-black" title="Hidden from Desktop"></div>` : '';
+
+        el.className = `flex flex-col items-center gap-2 p-2 rounded cursor-pointer group w-[90px] select-none ${opacity} relative`;
+        el.innerHTML = `
+            <div class="w-12 h-12 bg-gray-800/80 rounded-xl flex items-center justify-center text-white shadow-lg border border-white/10 group-hover:scale-105 transition-transform overflow-visible relative">
+                ${iconHtml}
+                ${indicator}
+            </div>
+            <span class="text-xs text-center text-gray-200 font-medium drop-shadow-md truncate w-full px-1 bg-black/50 rounded">${window.esc(app.name)}</span>
+        `;
         
         el.onclick = () => WindowManager.openApp(app);
         el.oncontextmenu = (e) => { 
@@ -258,12 +290,12 @@ window.filterFinder = function(stack) {
     if(status) status.innerText = `${apps.length} apps in ${stack}`;
 };
 
-// --- Context Menu Logic (Strict Mode Aware) ---
+// --- Context Menu Logic (Strict & Smart) ---
 
 window.showContextMenu = function(e, app) {
     window.hideContextMenu();
     
-    // Rule: In Runner Mode, Context Menu only shows "Open" (and maybe basic info), NO Delete/Edit
+    // [RULE] Runner Mode Limitation
     if (window.systemMode === 'runner' && app.type !== 'system') {
         const menu = document.createElement('div');
         menu.id = 'contextMenu';
@@ -272,25 +304,28 @@ window.showContextMenu = function(e, app) {
             <div onclick="WindowManager.openApp(window.all.find(a=>a.id==='${app.id}')); window.hideContextMenu()" class="px-4 py-2 hover:bg-blue-600 cursor-pointer text-xs text-gray-200 flex items-center gap-2">
                 <span class="material-symbols-outlined text-sm">open_in_new</span> Open App
             </div>
-            <div class="px-4 py-1 text-[10px] text-gray-500 text-center">v1.0 • Runner Mode</div>
+            <div class="px-4 py-1 text-[10px] text-gray-500 text-center border-t border-gray-700 mt-1 pt-1">Running in Presentation Mode</div>
         `;
         appendMenu(menu, e);
         return;
     }
 
-    // Edit Mode Menu (Full Power)
+    // Edit Mode Menu
     const menu = document.createElement('div');
     menu.id = 'contextMenu';
     menu.className = "fixed bg-[#2d2d2d] border border-blue-900/50 rounded-lg shadow-2xl py-1 z-[999999] min-w-[160px] animate-popIn flex flex-col";
     const onDesk = app.onDesktop;
-    const isSystem = app.type === 'system' || app.id === 'cloudstax-core' || ['finder','editor','settings'].includes(app.id);
+    // [RULE] Protected Apps Check
+    const isSystem = app.type === 'system' || SYSTEM_PROTECTED_APPS.includes(app.id);
+    
     let deleteOption = '';
     if (!isSystem) {
-        deleteOption = `<div class="h-px bg-gray-700 my-1"></div><div onclick="window.deleteApp('${app.id}'); window.hideContextMenu()" class="px-4 py-2 hover:bg-red-900 cursor-pointer text-xs text-red-300 flex items-center gap-2"><span class="material-symbols-outlined text-sm">delete</span> Delete</div>`;
+        deleteOption = `<div class="h-px bg-gray-700 my-1"></div><div onclick="window.deleteApp('${app.id}'); window.hideContextMenu()" class="px-4 py-2 hover:bg-red-900 cursor-pointer text-xs text-red-300 flex items-center gap-2"><span class="material-symbols-outlined text-sm">delete</span> Delete App</div>`;
     }
+
     menu.innerHTML = `
         <div onclick="WindowManager.openApp(window.all.find(a=>a.id==='${app.id}')); window.hideContextMenu()" class="px-4 py-2 hover:bg-blue-600 cursor-pointer text-xs text-gray-200 flex items-center gap-2"><span class="material-symbols-outlined text-sm">open_in_new</span> Run App</div>
-        ${!isSystem ? `<div onclick="window.toggleDesktop('${app.id}'); window.hideContextMenu()" class="px-4 py-2 hover:bg-blue-600 cursor-pointer text-xs text-gray-200 flex items-center gap-2"><span class="material-symbols-outlined text-sm">${onDesk ? 'close' : 'add_to_queue'}</span> ${onDesk ? 'Unpin from Desktop' : 'Pin to Desktop'}</div>` : ''}
+        ${!isSystem ? `<div onclick="window.toggleDesktop('${app.id}'); window.hideContextMenu()" class="px-4 py-2 hover:bg-blue-600 cursor-pointer text-xs text-gray-200 flex items-center gap-2"><span class="material-symbols-outlined text-sm">${onDesk ? 'visibility_off' : 'visibility'}</span> ${onDesk ? 'Hide from Desktop' : 'Show on Desktop'}</div>` : ''}
         ${!isSystem ? `<div onclick="if(window.Editor) window.Editor.open('${app.id}'); window.hideContextMenu()" class="px-4 py-2 hover:bg-blue-600 cursor-pointer text-xs text-gray-200 flex items-center gap-2"><span class="material-symbols-outlined text-sm">code</span> Edit Source</div>` : ''}
         ${deleteOption}
     `;
@@ -299,10 +334,15 @@ window.showContextMenu = function(e, app) {
 
 function appendMenu(menu, e) {
     document.body.appendChild(menu);
+    // [RULE] Boundary Check (Prevent off-screen)
     let x = e.clientX || 0;
     let y = e.clientY || 0;
-    if (x + 160 > window.innerWidth) x = window.innerWidth - 170;
-    if (y + 200 > window.innerHeight) y = window.innerHeight - 210;
+    const w = 160;
+    const h = 150; 
+    
+    if (x + w > window.innerWidth) x = window.innerWidth - w - 10;
+    if (y + h > window.innerHeight) y = window.innerHeight - h - 10;
+    
     menu.style.left = `${x}px`;
     menu.style.top = `${y}px`;
 }
@@ -315,17 +355,26 @@ window.toggleDesktop = async function(id) {
 };
 
 window.deleteApp = async function(id) {
+    // [RULE] Extra Safety Check for System Apps
     const app = window.all.find(a => a.id === id);
-    if(app && (app.type === 'system' || ['editor','finder','settings'].includes(id))) { window.notify("Cannot delete system apps", true); return; }
+    if(app && (app.type === 'system' || SYSTEM_PROTECTED_APPS.includes(id))) { 
+        window.notify("⛔ Cannot delete System Apps", true); 
+        return; 
+    }
     
-    // Modal Confirm (Strict)
-    if(confirm(`[EDIT MODE] Permanently delete "${app.name}"? This cannot be undone.`)) {
+    if(confirm(`[EDIT MODE] Permanently delete "${app.name}"?\n\nThis cannot be undone.`)) {
         try { await window.dbOp('delete', id); window.notify("App Deleted"); window.all = window.all.filter(a => a.id !== id); window.renderDesktopIcons(); window.renderFinder(); if(WindowManager.windows.has(id)) WindowManager.close(id); } catch(e) { console.error(e); window.notify("Delete Failed", true); }
     }
 };
 
 window.openSettingsModal = function() {
-    if(window.isModalOpen && window.isModalOpen()) return; // Prevent stacking
+    if(window.isModalOpen && window.isModalOpen()) {
+        // Trigger shake on existing modal
+        const m = document.querySelector('.active-modal');
+        if(m) { m.classList.add('animate-shake'); setTimeout(()=>m.classList.remove('animate-shake'),400); }
+        return;
+    }
+    
     window.pushModal('settings');
 
     const w = 400; const x = (window.innerWidth - w) / 2; const y = 100;
