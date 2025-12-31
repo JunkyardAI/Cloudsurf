@@ -1,4 +1,4 @@
-// --- MODULE: EDITOR 7.1 (Refined & Robust) ---
+// --- MODULE: EDITOR 7.2 (Finalized & Bound) ---
 
 window.Editor = {
     // State
@@ -72,7 +72,9 @@ window.Editor = {
         const path = prompt("Enter file path (e.g., src/main.js):", "");
         if (!path) return;
         
-        const cleanPath = window.normalizePath(path);
+        // Fallback if global normalizePath is missing
+        const cleanPath = window.normalizePath ? window.normalizePath(path) : path.replace(/^\/+/, '').trim();
+        
         if (this.state.files[cleanPath]) {
             if(window.notify) window.notify("File already exists", true);
             return;
@@ -106,6 +108,7 @@ window.Editor = {
     },
 
     deleteFile: function(path) {
+        if (!path) return;
         if(!confirm(`Delete "${path}"?`)) return;
         
         delete this.state.files[path];
@@ -259,7 +262,7 @@ window.Editor = {
         const promises = validFiles.map(async (f) => {
             const rawPath = f.path;
             let finalPath = rawPath.startsWith(rootPrefix) ? rawPath.slice(rootPrefix.length) : rawPath;
-            finalPath = window.normalizePath(finalPath);
+            finalPath = window.normalizePath ? window.normalizePath(finalPath) : finalPath;
             
             if (!finalPath) return;
 
@@ -707,7 +710,36 @@ window.Editor = {
     updateStatusBar: function() { const fileEl = document.getElementById('sb-file'); if(fileEl) fileEl.textContent = this.state.activeFilePath || 'No file'; },
     highlightActiveFile: function(path) { document.querySelectorAll('[id^="file-item-"]').forEach(el => el.classList.remove('bg-blue-900/40', 'text-blue-400')); const activeEl = document.getElementById(`file-item-${path.replace(/[^a-zA-Z0-9]/g, '-')}`); if(activeEl) activeEl.classList.add('bg-blue-900/40', 'text-blue-400'); },
     setLayout: function(mode) { this.state.mode = mode; const container = document.getElementById('editorContainer'); const preview = document.getElementById('editorPreviewPane'); const btns = ['btnViewCode', 'btnViewSplit', 'btnViewPreview']; btns.forEach(b => { const el = document.getElementById(b); if(el) el.classList.remove('text-white', 'bg-white/10'); }); const activeBtn = mode === 'code' ? 'btnViewCode' : mode === 'preview' ? 'btnViewPreview' : 'btnViewSplit'; const el = document.getElementById(activeBtn); if(el) el.classList.add('text-white', 'bg-white/10'); container.classList.remove('hidden', 'w-full', 'w-1/2'); preview.classList.remove('hidden', 'w-full', 'w-1/2'); if (mode === 'code') { container.classList.add('w-full'); preview.classList.add('hidden'); } else if (mode === 'preview') { container.classList.add('hidden'); preview.classList.add('w-full'); this.refreshPreview(); } else { container.classList.add('w-1/2'); preview.classList.add('w-1/2'); this.refreshPreview(); } if(window.editorCM) window.editorCM.refresh(); },
-    bindShortcuts: function() { window.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); this.toggleSaveOptions(); } }); },
+    
+    bindShortcuts: function() { 
+        window.addEventListener('keydown', (e) => { 
+            // Save: Ctrl/Cmd + S
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') { 
+                e.preventDefault(); 
+                this.toggleSaveOptions(); 
+                return;
+            } 
+
+            // Delete File: Delete or Backspace
+            // CRITICAL: We must check if the user is typing in an input or the CodeMirror editor.
+            // If they are, do NOT delete the file.
+            const isInputActive = document.activeElement.tagName === 'INPUT' || 
+                                  document.activeElement.tagName === 'TEXTAREA' || 
+                                  document.activeElement.isContentEditable;
+            
+            const isCmFocused = window.editorCM && window.editorCM.hasFocus();
+
+            if (!isInputActive && !isCmFocused) {
+                 if (e.key === 'Delete' || (e.key === 'Backspace' && !e.metaKey && !e.ctrlKey)) {
+                    // Safety check: ensure a file is selected
+                    if (this.state.activeFilePath) {
+                        e.preventDefault(); // Prevent browser "Back" navigation on Backspace
+                        this.deleteFile(this.state.activeFilePath);
+                    }
+                 }
+            }
+        }); 
+    },
     
     initDeepIntegrations: function() { 
         const app = document.getElementById('editor-app'); 
@@ -761,9 +793,13 @@ window.Editor = {
         }
         
         // Fix New File Button (+ icon in sidebar)
-        const newFileBtn = document.querySelector('#file-tree button[title="New File"]');
+        // Broadened selector to ensure we catch it in the header, not just the tree container
+        const newFileBtn = document.querySelector('#editor-app button[title="New File"]'); 
         if(newFileBtn) {
-             newFileBtn.onclick = (e) => { e.stopPropagation(); this.newFile(); };
+             newFileBtn.addEventListener('click', (e) => { 
+                 e.stopPropagation(); 
+                 this.newFile(); 
+             });
         }
     },
     
