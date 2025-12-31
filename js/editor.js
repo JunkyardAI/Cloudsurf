@@ -1,4 +1,4 @@
-// --- MODULE: EDITOR 5.0 (Full System Upgrade) ---
+// --- MODULE: EDITOR 5.1 (Fixed Icon & Robust Imports) ---
 
 window.Editor = {
     // State
@@ -10,7 +10,8 @@ window.Editor = {
         blobs: [],           
         consoleHeight: '128px',
         expandedFolders: new Set(),
-        initialized: false
+        initialized: false,
+        iconData: null // Holds the Base64 icon
     },
 
     // --- Core Lifecycle ---
@@ -19,25 +20,24 @@ window.Editor = {
         const appWin = document.getElementById('editor-app');
         if(!appWin) return;
         
-        // 1. UI Reset & Layering
+        // 1. UI Reset
         appWin.classList.remove('hidden', 'minimized');
         if(window.WindowManager) {
             WindowManager.zIndex++;
             appWin.style.zIndex = WindowManager.zIndex;
         }
         
-        // 2. State Reset
         this.state.appId = appId;
         this.revokeBlobs();
 
-        // 3. Init Integrations (One-time)
+        // 2. Bindings
         if (!this.state.initialized) {
             this.initDeepIntegrations();
             this.bindShortcuts();
             this.state.initialized = true;
         }
 
-        // 4. Load or New
+        // 3. Load Logic
         if (appId) {
             this.loadApp(appId);
         } else {
@@ -45,7 +45,7 @@ window.Editor = {
         }
 
         this.setLayout(this.state.mode);
-        this.updateCategoryDropdown(); // Populate "Stack" options
+        this.updateCategoryDropdown();
     },
 
     revokeBlobs: function() {
@@ -54,26 +54,26 @@ window.Editor = {
     },
 
     loadApp: async function(appId) {
-        // Try to get fresh from DB first
         let app = (typeof all !== 'undefined' ? all : []).find(x => x.id === appId);
         if(window.dbOp) {
             const dbApp = await window.dbOp('get', appId);
-            if(dbApp) app = dbApp; // Use detailed DB record
+            if(dbApp) app = dbApp; 
         }
 
         if(!app) return this.resetToEmpty();
 
-        // Load Metadata
         this.setFieldValue('inName', app.name);
         this.setFieldValue('inStack', app.stack || 'Development');
-        this.setFieldValue('inIcon', app.iconUrl || '');
+        
+        // Load Icon (Internal Data or External URL)
+        this.state.iconData = app.iconData || null;
+        this.updateIconPreview(this.state.iconData || app.iconUrl);
+        
         this.setCheckValue('chkFav', app.isFavorite || false);
         this.setCheckValue('chkDesk', app.onDesktop || false);
         
-        // Load Files (Deep Clone to avoid ref issues)
         this.state.files = JSON.parse(JSON.stringify(app.files || {}));
         
-        // Render
         this.renderTree();
 
         const entry = this.findEntryPoint();
@@ -85,6 +85,9 @@ window.Editor = {
 
     resetToEmpty: function() {
         this.state.appId = crypto.randomUUID();
+        this.state.iconData = null;
+        this.updateIconPreview(null);
+
         this.state.files = {
             'index.html': {
                 content: '<!DOCTYPE html>\n<html>\n<head>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <h1>New Project</h1>\n  <script src="app.js"></script>\n</body>\n</html>',
@@ -102,11 +105,54 @@ window.Editor = {
         
         if(window.editorCM) window.editorCM.setValue(this.state.files['index.html'].content);
         
-        // REMOVED auto scaffold timer
         this.refreshPreview();
     },
 
-    // --- Advanced File Operations ---
+    // --- Icon Upload System ---
+    
+    triggerIconUpload: function() {
+        // Create hidden input on fly if needed, or use existing from HTML
+        let input = document.getElementById('iconUploadInput');
+        if(!input) {
+            input = document.createElement('input');
+            input.id = 'iconUploadInput';
+            input.type = 'file';
+            input.accept = '.png,.jpg,.jpeg,.ico,.svg';
+            input.style.display = 'none';
+            input.onchange = (e) => this.handleIconFile(e);
+            document.body.appendChild(input);
+        }
+        input.click();
+    },
+
+    handleIconFile: function(e) {
+        const file = e.target.files[0];
+        if(!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            this.state.iconData = evt.target.result; // Base64 string
+            this.updateIconPreview(this.state.iconData);
+        };
+        reader.readAsDataURL(file);
+    },
+
+    updateIconPreview: function(src) {
+        const previewEl = document.getElementById('iconPreviewImg');
+        const placeholder = document.getElementById('iconPlaceholder');
+        if(previewEl && placeholder) {
+            if(src) {
+                previewEl.src = src;
+                previewEl.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+            } else {
+                previewEl.classList.add('hidden');
+                placeholder.classList.remove('hidden');
+            }
+        }
+    },
+
+    // --- File Operations ---
 
     switchFile: function(path) {
         this.syncCurrentFile();
@@ -120,13 +166,12 @@ window.Editor = {
         this.toggleImagePreview(isImage || isSvg, file);
 
         if (!isImage && window.editorCM) {
-            if(isSvg) this.toggleImagePreview(false, null); // Edit SVG as text
+            if(isSvg) this.toggleImagePreview(false, null);
 
             window.editorCM.setValue(file.content || "");
             window.editorCM.setOption('readOnly', false);
             window.editorCM.clearHistory();
             
-            // Mode Auto-Detection
             const ext = path.split('.').pop().toLowerCase();
             const modeMap = { 
                 'js': 'javascript', 'jsx': 'jsx', 'ts': 'text/typescript',
@@ -166,7 +211,7 @@ window.Editor = {
         }
     },
 
-    // --- ROBUST IMPORT ENGINE (The Fix) ---
+    // --- Import Engine ---
 
     triggerFolderImport: function() {
         let input = document.getElementById('folderImportInput');
@@ -181,46 +226,33 @@ window.Editor = {
             input.onchange = (e) => this.handleInputImport(e);
             document.body.appendChild(input);
         }
-        input.value = ''; // Reset
+        input.value = ''; 
         input.click();
     },
 
     handleInputImport: async function(e) {
         const files = Array.from(e.target.files);
         if(files.length === 0) return;
-
-        // Use webkitRelativePath for structure (e.g. "MyProject/css/style.css")
-        const batch = files.map(f => ({
-            entry: f,
-            path: f.webkitRelativePath || f.name
-        }));
-        
+        const batch = files.map(f => ({ entry: f, path: f.webkitRelativePath || f.name }));
         await this.processImportBatch(batch);
     },
 
     handleDropImport: async function(e) {
         e.preventDefault();
         e.stopPropagation();
-        
         const items = e.dataTransfer.items;
         const entries = [];
         for (let i = 0; i < items.length; i++) {
             const item = items[i].webkitGetAsEntry();
-            if (item) {
-                await this.scanEntryRecursive(item, "", entries);
-            }
+            if (item) await this.scanEntryRecursive(item, "", entries);
         }
-        
-        if (entries.length > 0) {
-            await this.processImportBatch(entries);
-        }
+        if (entries.length > 0) await this.processImportBatch(entries);
     },
 
     scanEntryRecursive: async function(entry, path, resultList) {
         if (entry.isFile) {
             return new Promise((resolve) => {
                 entry.file((file) => {
-                    // Normalize path separators
                     resultList.push({ entry: file, path: (path + file.name).replace(/\/+/g, '/') });
                     resolve();
                 });
@@ -230,10 +262,9 @@ window.Editor = {
             const readEntries = async () => {
                 const entries = await new Promise((res) => reader.readEntries(res));
                 if (entries.length === 0) return;
-                
                 const promises = entries.map(child => this.scanEntryRecursive(child, path + entry.name + "/", resultList));
                 await Promise.all(promises);
-                await readEntries(); // Continue reading batch
+                await readEntries(); 
             };
             await readEntries();
         }
@@ -242,8 +273,7 @@ window.Editor = {
     processImportBatch: async function(fileObjects) {
         window.notify(`Importing ${fileObjects.length} files...`);
         
-        // 1. Root Detection
-        // If all files share the same first folder, strip it and use it as project name
+        // Root stripping logic
         const firstPath = fileObjects[0].path;
         const rootMatch = firstPath.match(/^([^/]+)\//);
         let rootPrefix = "";
@@ -260,13 +290,11 @@ window.Editor = {
         const newVFS = {};
         const textExtensions = new Set(['js','jsx','ts','tsx','html','css','scss','json','md','txt','svg','xml','gitignore','env']);
 
-        // 2. Processing
         const promises = fileObjects.map(async (f) => {
             const rawPath = f.path;
             let finalPath = rawPath.startsWith(rootPrefix) ? rawPath.slice(rootPrefix.length) : rawPath;
             finalPath = window.normalizePath(finalPath);
             
-            // Skip junk
             if(finalPath.includes('.git/') || finalPath.includes('node_modules/') || finalPath.startsWith('.')) return;
 
             const ext = finalPath.split('.').pop().toLowerCase();
@@ -276,13 +304,11 @@ window.Editor = {
                 const text = await f.entry.text();
                 newVFS[finalPath] = { content: text, type: 'text' };
             } else {
-                newVFS[finalPath] = { content: f.entry, type: 'blob' }; // Store actual File object
+                newVFS[finalPath] = { content: f.entry, type: 'blob' }; 
             }
         });
 
         await Promise.all(promises);
-
-        // 3. Merge
         this.state.files = { ...this.state.files, ...newVFS };
         this.renderTree();
         
@@ -293,30 +319,22 @@ window.Editor = {
         this.refreshPreview();
     },
 
-    // --- Tree & Visualization ---
-
+    // --- Visualization ---
     renderTree: function() {
         const treeContainer = document.getElementById('fileTreeContent');
         if(!treeContainer) return;
         treeContainer.innerHTML = '';
-        
         const files = this.state.files;
-        
-        // Build Hierarchy
         const root = { name: 'root', children: {}, files: [] };
         
         Object.keys(files).forEach(path => {
             const parts = path.split('/');
             const fileName = parts.pop();
             let current = root;
-            
             parts.forEach(part => {
-                if (!current.children[part]) {
-                    current.children[part] = { name: part, children: {}, files: [] };
-                }
+                if (!current.children[part]) current.children[part] = { name: part, children: {}, files: [] };
                 current = current.children[part];
             });
-            
             current.files.push({ name: fileName, fullPath: path });
         });
 
@@ -324,13 +342,11 @@ window.Editor = {
     },
 
     renderFolder: function(folder, container, depth) {
-        // Folders
         Object.keys(folder.children).sort().forEach(folderName => {
             const subFolder = folder.children[folderName];
             const folderDiv = document.createElement('div');
             folderDiv.className = 'ml-2';
-            
-            const isExpanded = depth < 2; // Auto expand first few levels
+            const isExpanded = depth < 2; 
             
             const label = document.createElement('div');
             label.className = 'flex items-center gap-1 text-gray-400 hover:text-white cursor-pointer py-0.5 select-none';
@@ -358,11 +374,9 @@ window.Editor = {
             folderDiv.appendChild(label);
             folderDiv.appendChild(childrenContainer);
             container.appendChild(folderDiv);
-
             this.renderFolder(subFolder, childrenContainer, depth + 1);
         });
 
-        // Files
         folder.files.sort((a,b) => a.name.localeCompare(b.name)).forEach(file => {
             const fileDiv = document.createElement('div');
             const isActive = file.fullPath === this.state.activeFilePath;
@@ -378,28 +392,21 @@ window.Editor = {
                     <span class="material-symbols-outlined text-[10px]">close</span>
                 </button>
             `;
-            
             fileDiv.onclick = (e) => { e.stopPropagation(); this.switchFile(file.fullPath); };
             container.appendChild(fileDiv);
         });
     },
 
-    // --- Preview Engine ---
-
     refreshPreview: function() {
         const frame = document.getElementById('editorPreviewFrame');
         if(!frame) return;
-
         this.syncCurrentFile();
         const files = this.state.files;
         if(Object.keys(files).length === 0) return;
 
-        // Use WindowManager's Robust Launch Logic
         if(window.WindowManager && window.WindowManager.launchApp) {
             window.WindowManager.launchApp({ name: "Preview", files: files })
-                .then(html => {
-                    frame.srcdoc = html;
-                });
+                .then(html => { frame.srcdoc = html; });
         }
         
         const appName = document.getElementById('inName').value || "App";
@@ -407,37 +414,30 @@ window.Editor = {
         if(urlBar) urlBar.textContent = `local://${appName.toLowerCase().replace(/\s/g,'-')}/${this.state.activeFilePath||''}`;
     },
 
-    // --- Saving & Export ---
-
     updateCategoryDropdown: function() {
-        const select = document.getElementById('categorySelect'); // Add this to HTML if missing, or use datalist
+        const select = document.getElementById('inStack');
+        // Simple placeholder logic - in a real react app this would bind to state
         if(!select) return;
-        // Logic to populate stacks from window.all
-        const stacks = new Set(['Development', 'Design', 'Games']);
-        if(window.all) window.all.forEach(a => { if(a.stack) stacks.add(a.stack); });
-        
-        // ... Populate logic would go here if UI element existed
     },
 
     saveProject: async function() {
         window.notify("Saving...");
         this.syncCurrentFile();
         
-        // Category Logic: "New Category" vs Existing
         let stack = document.getElementById('inStack').value;
         if(stack === 'New Category') {
             stack = prompt("Enter new category name:");
-            if(!stack) return; // Cancelled
+            if(!stack) return;
         }
 
         const app = {
             id: this.state.appId || crypto.randomUUID(),
             name: document.getElementById('inName').value || "Untitled",
             stack: stack,
-            iconUrl: document.getElementById('inIcon').value,
+            iconData: this.state.iconData, // Save the actual file data
             onDesktop: document.getElementById('chkDesk').checked,
             isFavorite: document.getElementById('chkFav').checked,
-            files: this.state.files, // Save the FULL structure
+            files: this.state.files,
             lastModified: Date.now()
         };
         
@@ -452,8 +452,6 @@ window.Editor = {
             window.notify("Save Failed", true); 
         }
     },
-
-    // --- Helper Utils ---
 
     syncCurrentFile: function() {
         if (this.state.activeFilePath && this.state.files[this.state.activeFilePath]) {
@@ -502,16 +500,34 @@ window.Editor = {
         }
     },
     
-    // UI Toggles
     toggleScaffold: function() { document.getElementById('scaffoldModal').classList.toggle('hidden'); },
     toggleSaveOptions: function() { document.getElementById('saveOptionsModal').classList.toggle('hidden'); },
+    
+    updateStatusBar: function() {
+         const fileEl = document.getElementById('sb-file');
+        if(fileEl) fileEl.textContent = this.state.activeFilePath || 'No file';
+    },
 
-    // Keep layout helpers
+    highlightActiveFile: function(path) {
+        document.querySelectorAll('[id^="file-item-"]').forEach(el => el.classList.remove('bg-blue-900/40', 'text-blue-400'));
+        const activeEl = document.getElementById(`file-item-${path.replace(/[^a-zA-Z0-9]/g, '-')}`);
+        if(activeEl) activeEl.classList.add('bg-blue-900/40', 'text-blue-400');
+    },
+
     setLayout: function(mode) {
         this.state.mode = mode;
         const container = document.getElementById('editorContainer');
         const preview = document.getElementById('editorPreviewPane');
+        const btns = ['btnViewCode', 'btnViewSplit', 'btnViewPreview'];
+        btns.forEach(b => { 
+            const el = document.getElementById(b);
+            if(el) el.classList.remove('text-white', 'bg-white/10');
+        });
         
+        const activeBtn = mode === 'code' ? 'btnViewCode' : mode === 'preview' ? 'btnViewPreview' : 'btnViewSplit';
+        const el = document.getElementById(activeBtn);
+        if(el) el.classList.add('text-white', 'bg-white/10');
+
         container.classList.remove('hidden', 'w-full', 'w-1/2');
         preview.classList.remove('hidden', 'w-full', 'w-1/2');
 
@@ -542,6 +558,25 @@ window.Editor = {
             document.getElementById('drop-overlay').classList.add('hidden');
             this.handleDropImport(e);
         });
+        
+        // Status Bar
+        const container = document.getElementById('editorContainer');
+        if(container && !document.getElementById('editor-status-bar')) {
+            const sb = document.createElement('div');
+            sb.id = 'editor-status-bar';
+            sb.className = 'absolute bottom-0 left-0 right-0 bg-[#191a21] text-gray-500 text-[10px] px-2 py-1 flex justify-between border-t border-gray-800 z-20';
+            sb.innerHTML = `<div class="flex gap-4"><span id="sb-file">No file</span> <span id="sb-mode"></span></div> <span id="sb-cursor">Ln 1, Col 1</span>`;
+            container.appendChild(sb);
+        }
+
+        if(window.editorCM) {
+            window.editorCM.on('cursorActivity', (cm) => {
+                const pos = cm.getCursor();
+                const el = document.getElementById('sb-cursor');
+                if(el) el.textContent = `Ln ${pos.line + 1}, Col ${pos.ch + 1}`;
+            });
+            window.editorCM.on('change', () => this.updateStatusBar());
+        }
     },
     
     setFieldValue: function(id, val) { const el = document.getElementById(id); if(el) el.value = val; },
