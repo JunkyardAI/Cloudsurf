@@ -39,6 +39,19 @@ window.init = async function() {
 // --- Strict Mode System ---
 
 window.toggleSystemMode = function() {
+   // [MANUAL RULE START] Prevent leaving Edit Mode if Editor is open
+    if (window.systemMode === 'edit') {
+        const editorApp = document.getElementById('editor-app');
+        // Check if editor exists and is NOT hidden
+        if (editorApp && !editorApp.classList.contains('hidden')) {
+            if(window.notify) window.notify("Close Code Studio before switching modes", true);
+            // Optional: Shake the window or focus it to show the user
+            if(window.WindowManager) window.WindowManager.focusWindow('editor-app');
+            return; // STOP: Do not switch modes
+        }
+    }
+    // [MANUAL RULE END]
+    
     // Rule: Cannot switch if Editor has unsaved changes
     if (window.Editor && window.Editor.hasUnsavedChanges && window.Editor.hasUnsavedChanges()) {
         if(window.notify) window.notify("Save changes in Editor first!", true);
