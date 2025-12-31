@@ -1,5 +1,4 @@
-// --- MODULE: WINDOW MANAGER ---
-// v5.3: Uses global Window.Editor properly
+// --- MODULE: WINDOW MANAGER (v6.0 - Deep Link & Icon Support) ---
 
 const WIN_STATE_KEY = 'cloudstax_win_state';
 
@@ -12,55 +11,54 @@ window.WindowManager = {
     init: function() {
         window.addEventListener('mousemove', (e) => this.onDrag(e));
         window.addEventListener('mouseup', () => this.stopDrag());
+        // Handle window resize for centering
+        window.addEventListener('resize', () => this.recenterWindows());
     },
 
-    getSavedState: function(id) { 
-        try { return JSON.parse(localStorage.getItem(WIN_STATE_KEY)||'{}')[id]; } catch { return null; } 
-    },
-    
-    saveState: function(id, rect) { 
-        try { 
-            const states = JSON.parse(localStorage.getItem(WIN_STATE_KEY)||'{}'); 
-            states[id] = rect; 
-            localStorage.setItem(WIN_STATE_KEY, JSON.stringify(states)); 
-        } catch {} 
-    },
+    // --- Window Spawning & State ---
 
     openApp: async function(app) {
         if (!app || !app.id) return;
 
-        // SAFE CALL: Check if Editor exists
+        // 1. Editor Special Handling
         if (app.type === 'editor' || app.id === 'editor') {
             if (window.Editor && window.Editor.open) {
+                // Pass a specific ID if we are "Editing Source" of an existing app
                 window.Editor.open(app.id !== 'editor' ? app.id : null);
-            } else {
-                console.error("Editor module not loaded");
             }
             this.focusWindow('editor-app');
             return;
         }
 
+        // 2. Focus if already open
         if (this.windows.has(app.id)) {
             this.focusWindow(app.id);
             return;
         }
 
+        // 3. Create Window
         this.zIndex++;
         const winId = app.id;
         const win = document.createElement('div');
         win.id = `win-${winId}`;
         win.className = 'window absolute flex flex-col bg-[#1e1e1e] border border-gray-700 rounded-lg shadow-2xl overflow-hidden animate-popIn';
         
+        // Smart Positioning
         const saved = this.getSavedState(app.id);
         if(saved) {
             win.style.width = saved.w; win.style.height = saved.h; win.style.left = saved.x; win.style.top = saved.y;
         } else {
-            win.style.width = '800px'; win.style.height = '600px';
-            win.style.left = (100 + (this.windows.size * 30)) + 'px'; win.style.top = (50 + (this.windows.size * 30)) + 'px';
+            // Center Calculation
+            const w = 800, h = 600;
+            const x = Math.max(0, (window.innerWidth - w) / 2) + (this.windows.size * 20);
+            const y = Math.max(0, (window.innerHeight - h) / 2) + (this.windows.size * 20);
+            win.style.width = `${w}px`; win.style.height = `${h}px`;
+            win.style.left = `${x}px`; win.style.top = `${y}px`;
         }
         
         win.style.zIndex = this.zIndex;
         
+        // Resolve Icon (Async)
         const iconHtml = await this.resolveAppIcon(app, "text-sm");
 
         win.innerHTML = `
@@ -72,12 +70,14 @@ window.WindowManager = {
                         <button onclick="WindowManager.maximize('${winId}')" class="w-3 h-3 rounded-full bg-green-500 opacity-75 group-hover:opacity-100"></button>
                     </div>
                     <span class="text-xs font-medium text-gray-400 flex items-center gap-2">
-                        ${iconHtml} ${esc(app.name)}
+                        ${iconHtml} ${window.esc(app.name)}
                     </span>
                 </div>
-                <button onclick="document.getElementById('frame-${winId}').contentWindow.location.reload()" class="text-gray-500 hover:text-white p-1 rounded hover:bg-white/10" title="Refresh App">
-                    <span class="material-symbols-outlined text-[14px]">refresh</span>
-                </button>
+                <div class="flex gap-2">
+                    <button onclick="document.getElementById('frame-${winId}').contentWindow.location.reload()" class="text-gray-500 hover:text-white p-1 rounded hover:bg-white/10" title="Refresh App">
+                        <span class="material-symbols-outlined text-[14px]">refresh</span>
+                    </button>
+                </div>
             </div>
             <div class="flex-1 bg-white relative">
                 <iframe id="frame-${winId}" class="w-full h-full border-0 bg-white" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"></iframe>
@@ -91,7 +91,9 @@ window.WindowManager = {
         this.windows.set(winId, win);
         if(!app.id.startsWith('preview-')) this.addToDock(app);
 
+        // 4. Launch Logic
         try {
+            // Ensure we have the full app data (files might be missing in a shallow listing)
             let fullApp = app;
             if ((!app.files || Object.keys(app.files).length === 0) && window.dbOp) {
                 const dbApp = await window.dbOp('get', app.id);
@@ -102,6 +104,7 @@ window.WindowManager = {
             const frame = document.getElementById(`frame-${winId}`);
             const loader = document.getElementById(`loader-${winId}`);
             
+            // Render content
             requestAnimationFrame(() => {
                 if(frame && frame.contentDocument) {
                     frame.contentDocument.open();
@@ -116,76 +119,70 @@ window.WindowManager = {
 
         } catch (e) {
             console.error("Launch Error:", e);
-            if(window.notify) notify("App crashed on launch", true);
+            if(window.notify) window.notify("App crashed on launch", true);
             this.close(winId);
         }
     },
 
-    resolveAppIcon: async function(app, classes = "") {
-        if (!app.iconUrl) return `<span class="material-symbols-outlined ${classes}">grid_view</span>`;
-        
-        if (/^[a-z0-9_]+$/.test(app.iconUrl)) return `<span class="material-symbols-outlined ${classes}">${app.iconUrl}</span>`;
-        
-        if (app.iconUrl.startsWith('./') || app.iconUrl.startsWith('/')) {
-            let files = app.files;
-            if (!files && window.dbOp) {
-                const dbApp = await window.dbOp('get', app.id);
-                if (dbApp) files = dbApp.files;
-            }
-            
-            if (files) {
-                const cleanPath = app.iconUrl.replace(/^\.?\//, '');
-                const file = files[cleanPath];
-                if (file) {
-                    let url;
-                    if (file.type === 'blob') url = URL.createObjectURL(file.content);
-                    else url = `data:image/svg+xml;base64,${btoa(file.content)}`; 
-                    return `<img src="${url}" class="${classes} object-contain">`;
-                }
-            }
-        }
-
-        return `<img src="${app.iconUrl}" class="${classes} object-contain" onerror="this.style.display='none'">`;
-    },
+    // --- The Runtime Engine (Simulates Electron/Web Server) ---
 
     launchApp: async function(app) {
         if (app.url && (!app.files || Object.keys(app.files).length === 0)) {
             return `<script>window.location.href="${app.url}";<\/script>`;
         }
 
-        const fileMap = {};
         const files = app.files || {};
+        const urlMap = {};
         
+        // 1. Blob Creation (Phase 1)
         for (const path in files) {
             const file = files[path];
-            let resourceUrl;
             const mime = this.getMimeType(path);
+            let blobUrl;
             
-            if (mime.startsWith('text/') || mime === 'application/json' || mime === 'application/javascript') {
-                resourceUrl = `data:${mime};charset=utf-8,${encodeURIComponent(file.content)}`;
+            if (file.content instanceof Blob) {
+                blobUrl = URL.createObjectURL(file.content);
             } else {
-                if (file.content instanceof Blob) {
-                    resourceUrl = URL.createObjectURL(file.content);
-                } else {
-                    resourceUrl = URL.createObjectURL(new Blob([file.content], { type: mime }));
-                }
+                blobUrl = URL.createObjectURL(new Blob([file.content], { type: mime }));
             }
-            fileMap[window.normalizePath(path)] = resourceUrl;
+            
+            // Normalize path for lookup
+            urlMap[window.normalizePath(path)] = blobUrl;
         }
 
+        // 2. Entry Point Finding
         let indexContent = "";
-        const indexPath = Object.keys(files).find(k => k.toLowerCase().endsWith('index.html'));
+        const entryPoints = ['index.html', 'main.html', 'app.html'];
+        let indexPath = Object.keys(files).find(k => entryPoints.includes(k.toLowerCase().split('/').pop()));
+        
         if (indexPath) indexContent = files[indexPath].content;
-        else if (app.html) indexContent = app.html;
-        else indexContent = `<h1>${esc(app.name)}</h1><p>No index.html found</p>`;
+        else if (app.html) indexContent = app.html; // Legacy support
+        else indexContent = `<h1>${window.esc(app.name)}</h1><p>No index.html found</p>`;
 
-        for (const path in fileMap) {
+        // 3. Deep Linking / Relative Path Resolution (Phase 2)
+        // This regex aggressively finds href="", src="", url("") and replaces relative paths with Blob URLs
+        // It handles: ./style.css, style.css, /css/style.css, ../img/logo.png
+        
+        // We sort keys by length descending to prevent "style.css" replacing "my-style.css" incorrectly
+        const paths = Object.keys(urlMap).sort((a,b) => b.length - a.length);
+
+        paths.forEach(path => {
+            const blobUrl = urlMap[path];
+            // Escape for regex
             const safePath = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(`(['"])((\\./)|/)?${safePath}(['"])`, 'g');
-            indexContent = indexContent.replace(regex, `$1${fileMap[path]}$4`);
-        }
+            
+            // Matches: src="path", href='path', url(path)
+            // Group 1: prefix (src=", url()
+            // Group 3: path (captured)
+            // Group 5: suffix (", ')
+            const regex = new RegExp(`((href|src|action)=["']|url\\(["']?)((\\./|/)?${safePath})(["']?|\\))`, 'g');
+            
+            indexContent = indexContent.replace(regex, `$1${blobUrl}$5`);
+        });
 
-        const bridge = `<script>
+        // 4. Bridge Injection (Console & Error Handling)
+        const bridge = `
+        <script>
         window.onerror = function(m,u,l){ window.parent.postMessage({type:'log',level:'error',message:m + ' (Line ' + l + ')'},'*'); };
         const _log = (l, a) => window.parent.postMessage({type:'log',level:l,message:Array.from(a).join(' ')},'*');
         console.log = function(...a){ _log('info', a); };
@@ -202,6 +199,44 @@ window.WindowManager = {
         return indexContent;
     },
 
+    // --- Icon Resolution System ---
+
+    resolveAppIcon: async function(app, classes = "") {
+        // 1. Google Font Icon (Simple String)
+        if (!app.iconUrl) return `<span class="material-symbols-outlined ${classes}">grid_view</span>`;
+        if (/^[a-z0-9_]+$/.test(app.iconUrl)) return `<span class="material-symbols-outlined ${classes}">${app.iconUrl}</span>`;
+        
+        // 2. Internal File Reference (e.g., "assets/icon.png")
+        // We check if the app has a file matching the iconUrl
+        let files = app.files;
+        if (!files && window.dbOp) {
+            // Fetch if not loaded
+            const dbApp = await window.dbOp('get', app.id);
+            if (dbApp) files = dbApp.files;
+        }
+
+        if (files) {
+            // Try exact match, then normalize
+            const cleanPath = window.normalizePath(app.iconUrl);
+            const file = files[cleanPath] || files[app.iconUrl];
+            
+            if (file) {
+                let url;
+                if (file.type === 'blob' || file.content instanceof Blob) {
+                    url = URL.createObjectURL(file.content);
+                } else {
+                    url = `data:image/svg+xml;base64,${btoa(file.content)}`; 
+                }
+                return `<img src="${url}" class="${classes} object-contain select-none pointer-events-none">`;
+            }
+        }
+
+        // 3. External URL or Base64 (Fallback)
+        return `<img src="${app.iconUrl}" class="${classes} object-contain select-none pointer-events-none" onerror="this.style.display='none'">`;
+    },
+
+    // --- Window Controls ---
+
     close: function(id) {
         const win = document.getElementById(`win-${id}`);
         if (win) win.remove();
@@ -210,7 +245,8 @@ window.WindowManager = {
     },
 
     focusWindow: function(id) {
-        const win = document.getElementById(id.startsWith('win-') || id === 'editor-app' ? id : `win-${id}`);
+        const winId = id.startsWith('win-') || id === 'editor-app' ? id : `win-${id}`;
+        const win = document.getElementById(winId);
         if (win) {
             this.zIndex++;
             win.style.zIndex = this.zIndex;
@@ -218,11 +254,16 @@ window.WindowManager = {
             win.style.pointerEvents = '';
             win.style.opacity = '';
             win.style.transform = '';
+            if(win.dataset.maximized === 'true') {
+                 // Ensure maximized windows reset properly on focus if needed
+                 win.style.top = '0'; win.style.left = '0';
+            }
         }
     },
 
     minimize: function(id) {
-        const win = document.getElementById(id.startsWith('win-') || id === 'editor-app' ? id : `win-${id}`);
+        const winId = id.startsWith('win-') || id === 'editor-app' ? id : `win-${id}`;
+        const win = document.getElementById(winId);
         if (win) {
             win.classList.add('minimized');
             win.style.pointerEvents = 'none';
@@ -230,10 +271,12 @@ window.WindowManager = {
     },
 
     maximize: function(id) {
-        const win = document.getElementById(id.startsWith('win-') || id === 'editor-app' ? id : `win-${id}`);
+        const winId = id.startsWith('win-') || id === 'editor-app' ? id : `win-${id}`;
+        const win = document.getElementById(winId);
         if (!win) return;
         
         if (win.dataset.maximized === 'true') {
+            // Restore
             win.style.top = win.dataset.prevTop;
             win.style.left = win.dataset.prevLeft;
             win.style.width = win.dataset.prevWidth;
@@ -241,6 +284,7 @@ window.WindowManager = {
             win.dataset.maximized = 'false';
             win.style.borderRadius = '0.5rem';
         } else {
+            // Maximize
             win.dataset.prevTop = win.style.top;
             win.dataset.prevLeft = win.style.left;
             win.dataset.prevWidth = win.style.width;
@@ -254,6 +298,72 @@ window.WindowManager = {
         }
     },
 
+    recenterWindows: function() {
+        // Optional: logic to ensure windows stay on screen during resize
+    },
+
+    // --- Dock Logic ---
+
+    addToDock: async function(app) {
+        const dock = document.getElementById('dock-apps');
+        if (!dock || document.getElementById(`dock-icon-${app.id}`)) return;
+
+        const btn = document.createElement('div');
+        btn.id = `dock-icon-${app.id}`;
+        btn.className = 'w-12 h-12 bg-gray-800/80 rounded-xl hover:-translate-y-2 transition-all flex items-center justify-center text-white shadow-lg border border-white/10 cursor-pointer relative group';
+        
+        const iconHtml = await this.resolveAppIcon(app, "text-2xl");
+
+        btn.innerHTML = `
+            ${iconHtml}
+            <div class="absolute -bottom-1 w-1 h-1 bg-white rounded-full"></div>
+            <div class="absolute -top-10 bg-black text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-gray-700 z-[9999]">
+                ${window.esc(app.name)}
+            </div>
+        `;
+        btn.onclick = () => {
+            const win = document.getElementById(`win-${app.id}`);
+            if (win && win.classList.contains('minimized')) this.focusWindow(app.id);
+            else if (win && parseInt(win.style.zIndex) === this.zIndex) this.minimize(app.id);
+            else this.focusWindow(app.id);
+        };
+        dock.appendChild(btn);
+    },
+
+    removeFromDock: function(id) {
+        const el = document.getElementById(`dock-icon-${id}`);
+        if (el) el.remove();
+    },
+
+    toggleLauncher: function() {
+        const l = document.getElementById('appLauncher');
+        if (l) {
+            const isHidden = l.classList.contains('hidden');
+            if (isHidden) {
+                l.classList.remove('hidden');
+                this.zIndex++;
+                l.style.zIndex = this.zIndex + 10;
+                if (window.renderFinder) window.renderFinder();
+            } else {
+                l.classList.add('hidden');
+            }
+        }
+    },
+
+    // --- State Storage ---
+    getSavedState: function(id) { 
+        try { return JSON.parse(localStorage.getItem(WIN_STATE_KEY)||'{}')[id]; } catch { return null; } 
+    },
+    
+    saveState: function(id, rect) { 
+        try { 
+            const states = JSON.parse(localStorage.getItem(WIN_STATE_KEY)||'{}'); 
+            states[id] = rect; 
+            localStorage.setItem(WIN_STATE_KEY, JSON.stringify(states)); 
+        } catch {} 
+    },
+
+    // --- Dragging ---
     startDrag: function(e, id) {
         if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
         const win = document.getElementById(id);
@@ -265,6 +375,7 @@ window.WindowManager = {
             x: e.clientX - win.offsetLeft,
             y: e.clientY - win.offsetTop
         };
+        // Disable iframes to prevent mouse trapping
         document.querySelectorAll('iframe').forEach(f => f.style.pointerEvents = 'none');
     },
 
@@ -286,54 +397,15 @@ window.WindowManager = {
         }
     },
 
-    addToDock: async function(app) {
-        const dock = document.getElementById('dock-apps');
-        if (!dock || document.getElementById(`dock-icon-${app.id}`)) return;
-
-        const btn = document.createElement('div');
-        btn.id = `dock-icon-${app.id}`;
-        btn.className = 'w-12 h-12 bg-gray-800/80 rounded-xl hover:-translate-y-2 transition-all flex items-center justify-center text-white shadow-lg border border-white/10 cursor-pointer relative group';
-        
-        const iconHtml = await this.resolveAppIcon(app, "text-2xl");
-
-        btn.innerHTML = `
-            ${iconHtml}
-            <div class="absolute -bottom-1 w-1 h-1 bg-white rounded-full"></div>
-            <div class="absolute -top-10 bg-black text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-gray-700">
-                ${esc(app.name)}
-            </div>
-        `;
-        btn.onclick = () => {
-            const win = document.getElementById(`win-${app.id}`);
-            if (win && win.classList.contains('minimized')) this.focusWindow(app.id);
-            else if (win && parseInt(win.style.zIndex) === this.zIndex) this.minimize(app.id);
-            else this.focusWindow(app.id);
-        };
-        dock.appendChild(btn);
-    },
-
-    removeFromDock: function(id) {
-        const el = document.getElementById(`dock-icon-${id}`);
-        if (el) el.remove();
-    },
-
-    toggleLauncher: function() {
-        const l = document.getElementById('appLauncher');
-        if (l) {
-            l.classList.toggle('hidden');
-            if (!l.classList.contains('hidden')) {
-                this.zIndex++;
-                l.style.zIndex = this.zIndex + 10;
-                if (window.renderFinder) window.renderFinder();
-            }
-        }
-    },
-
     getMimeType: function(path) {
         const ext = path.split('.').pop().toLowerCase();
         return ({
-            'js': 'text/javascript', 'css': 'text/css', 'html': 'text/html',
-            'json': 'application/json', 'png': 'image/png', 'jpg': 'image/jpeg', 'svg': 'image/svg+xml'
+            'js': 'text/javascript', 'jsx': 'text/javascript', 
+            'css': 'text/css', 'html': 'text/html',
+            'json': 'application/json', 
+            'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 
+            'svg': 'image/svg+xml', 'gif': 'image/gif', 'webp': 'image/webp',
+            'ico': 'image/x-icon'
         })[ext] || 'text/plain';
     }
 };
