@@ -236,7 +236,18 @@ window.renderDesktopIcons = async function() {
             <span class="text-xs text-center text-gray-200 font-medium drop-shadow-md truncate w-full px-1 bg-black/50 rounded">${window.esc(app.name)}</span>
         `;
         
-        el.onclick = () => WindowManager.openApp(app);
+        // [MODIFIED] Click Action based on Mode
+        el.onclick = () => {
+            if (window.systemMode === 'edit') {
+                if (window.Editor) {
+                    window.Editor.open(app.id);
+                    if(window.notify) window.notify(`Editing "${app.name}"`);
+                }
+            } else {
+                WindowManager.openApp(app);
+            }
+        };
+
         el.oncontextmenu = (e) => { 
             e.preventDefault(); 
             e.stopPropagation(); 
@@ -281,7 +292,20 @@ window.filterFinder = function(stack) {
         el.className = "flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-gray-800 cursor-pointer transition select-none";
         el.innerHTML = `<div class="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center text-white overflow-hidden relative">${window.renderIconHtml(app.iconUrl, "text-xl")}</div><span class="text-xs text-gray-300 text-center truncate w-full">${window.esc(app.name)}</span>`;
         WindowManager.resolveAppIcon(app, "text-xl").then(html => { el.querySelector('.w-10').innerHTML = html; });
-        el.onclick = () => { WindowManager.openApp(app); WindowManager.toggleLauncher(); };
+        
+        // [MODIFIED] Click Action based on Mode
+        el.onclick = () => { 
+            if (window.systemMode === 'edit') {
+                if (window.Editor) {
+                    window.Editor.open(app.id);
+                    if(window.notify) window.notify(`Editing "${app.name}"`);
+                }
+            } else {
+                WindowManager.openApp(app); 
+            }
+            WindowManager.toggleLauncher(); 
+        };
+
         el.oncontextmenu = (e) => { e.preventDefault(); e.stopPropagation(); window.showContextMenu(e, app); };
         grid.appendChild(el);
     });
