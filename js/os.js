@@ -1,15 +1,23 @@
-// --- MODULE: OS (Startup & Shell) ---
+// --- MODULE: OS (Shell & Desktop) ---
+
 window.all = []; 
 window.bgAnimationPaused = false;
+window.settings = {
+    use3DBackground: true,
+    wallpaper: null // can be base64 or blobUrl
+};
 
 window.init = async function() {
     console.log("OS: Booting...");
+    
+    // 1. Load Settings
+    loadSettings();
 
-    // 1. Immediate Render (Fail-Safe)
+    // 2. Immediate Render (Fail-Safe)
     window.renderDesktopIcons();
     window.renderFinder();
 
-    // 2. Initialize Database
+    // 3. Initialize Database
     try {
         if (window.initDB) {
             await window.initDB();
@@ -19,15 +27,13 @@ window.init = async function() {
         console.error("DB Init Failed", e); 
     }
 
-    // 3. Background
-    try {
-        if(window.initBackground) window.initBackground();
-    } catch(e) { console.warn("Background failed", e); }
+    // 4. Background
+    initBackgroundSystem();
 
-    // 4. Listeners
-    if(typeof setupListeners === 'function') setupListeners();
+    // 5. Global Listeners (Context Menu, etc)
+    setupGlobalListeners();
 
-    // 5. Hide Boot Screen
+    // 6. Hide Boot Screen
     const boot = document.getElementById('boot-screen');
     if (boot) {
         setTimeout(() => {
@@ -36,6 +42,49 @@ window.init = async function() {
         }, 500);
     }
 };
+
+function loadSettings() {
+    try {
+        const s = localStorage.getItem('cloudstax_settings');
+        if(s) window.settings = { ...window.settings, ...JSON.parse(s) };
+    } catch(e) { console.warn("Settings load failed", e); }
+}
+
+function saveSettings() {
+    localStorage.setItem('cloudstax_settings', JSON.stringify(window.settings));
+    initBackgroundSystem(); // Refresh background
+}
+
+// --- Background System ---
+function initBackgroundSystem() {
+    const canvas = document.getElementById('bg-canvas');
+    const bgContainer = document.getElementById('desktop-bg-container') || document.body;
+
+    // A. Custom Wallpaper (Highest Priority)
+    if (window.settings.wallpaper) {
+        if(canvas) canvas.style.display = 'none';
+        bgContainer.style.backgroundImage = `url('${window.settings.wallpaper}')`;
+        bgContainer.style.backgroundSize = 'cover';
+        bgContainer.style.backgroundPosition = 'center';
+        window.bgAnimationPaused = true;
+        return;
+    }
+
+    // B. 3D Background
+    bgContainer.style.backgroundImage = ''; // Reset
+    if (window.settings.use3DBackground) {
+        if(canvas) canvas.style.display = 'block';
+        window.bgAnimationPaused = false;
+        initThreeJSBackground();
+    } else {
+        // C. Simple Black/Dark Background (Saver Mode)
+        if(canvas) canvas.style.display = 'none';
+        bgContainer.style.backgroundColor = '#111';
+        window.bgAnimationPaused = true;
+    }
+}
+
+// --- App Management ---
 
 window.refreshApps = async function() {
     if (window.dbOp) {
@@ -62,7 +111,6 @@ window.renderDesktopIcons = async function() {
             name: 'Code Studio',
             iconUrl: 'terminal',
             type: 'editor',
-            // SAFE CALL
             action: () => { if(window.Editor && window.Editor.open) window.Editor.open(); }
         },
         {
@@ -71,55 +119,62 @@ window.renderDesktopIcons = async function() {
             iconUrl: 'folder_open',
             type: 'system',
             action: () => WindowManager.toggleLauncher()
+        },
+        {
+            id: 'settings',
+            name: 'Settings',
+            iconUrl: 'settings',
+            type: 'system',
+            action: () => openSettingsModal()
         }
     ];
 
     systemApps.forEach(app => {
-        const el = createIconElement(app, app.iconUrl.includes('/'));
+        const el = createIconElement(app);
         el.onclick = app.action;
         desktop.appendChild(el);
     });
 
     // 2. USER APPS
     for (const app of window.all.filter(app => app.onDesktop)) {
-        let iconHtml = renderIconHtml(app.iconUrl, "text-2xl");
-        
-        if (app.iconUrl && (app.iconUrl.startsWith('./') || app.iconUrl.startsWith('/'))) {
-             if (WindowManager.resolveAppIcon) {
-                 iconHtml = await WindowManager.resolveAppIcon(app, "text-2xl");
-             }
+        // Use WindowManager to resolve custom icons (async)
+        let iconHtml = window.renderIconHtml(app.iconUrl, "text-2xl");
+        if (WindowManager.resolveAppIcon) {
+            iconHtml = await WindowManager.resolveAppIcon(app, "text-2xl");
         }
         
         const el = document.createElement('div');
-        el.className = "flex flex-col items-center gap-2 p-2 rounded cursor-pointer group w-[90px]";
+        el.className = "flex flex-col items-center gap-2 p-2 rounded cursor-pointer group w-[90px] select-none";
         el.innerHTML = `
-            <div class="w-12 h-12 bg-gray-800/80 rounded-xl flex items-center justify-center text-white shadow-lg border border-white/10 group-hover:scale-105 transition-transform">
+            <div class="w-12 h-12 bg-gray-800/80 rounded-xl flex items-center justify-center text-white shadow-lg border border-white/10 group-hover:scale-105 transition-transform overflow-hidden">
                 ${iconHtml}
             </div>
-            <span class="text-xs text-center text-gray-200 font-medium drop-shadow-md truncate w-full px-1">${esc(app.name)}</span>
+            <span class="text-xs text-center text-gray-200 font-medium drop-shadow-md truncate w-full px-1 bg-black/50 rounded">${window.esc(app.name)}</span>
         `;
         
         el.onclick = () => WindowManager.openApp(app);
         el.oncontextmenu = (e) => {
             e.preventDefault();
             e.stopPropagation();
-            if(window.showContextMenu) window.showContextMenu(e, app);
+            window.showContextMenu(e, app);
         };
         desktop.appendChild(el);
     }
 };
 
-function createIconElement(app, isImg) {
+function createIconElement(app) {
     const el = document.createElement('div');
-    el.className = "flex flex-col items-center gap-2 p-2 rounded cursor-pointer group w-[90px]";
+    el.className = "flex flex-col items-center gap-2 p-2 rounded cursor-pointer group w-[90px] select-none";
     el.innerHTML = `
         <div class="w-12 h-12 bg-gray-800/80 rounded-xl flex items-center justify-center text-white shadow-lg border border-white/10 group-hover:scale-105 transition-transform">
-            ${renderIconHtml(app.iconUrl, "text-2xl")}
+            ${window.renderIconHtml(app.iconUrl, "text-2xl")}
         </div>
-        <span class="text-xs text-center text-gray-200 font-medium drop-shadow-md truncate w-full px-1">${esc(app.name)}</span>
+        <span class="text-xs text-center text-gray-200 font-medium drop-shadow-md truncate w-full px-1 bg-black/50 rounded">${window.esc(app.name)}</span>
     `;
     return el;
 }
+
+// --- Finder / Launcher ---
 
 window.renderFinder = function() {
     const finderMain = document.getElementById('finderMain');
@@ -127,15 +182,16 @@ window.renderFinder = function() {
     if (!finderMain || !finderSide) return;
 
     finderMain.innerHTML = '';
-    finderSide.innerHTML = `<div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-2 mb-2 mt-2">Stacks</div>`;
     
-    // Group Stacks
+    // Aggregate Stacks
     const stacks = new Set(['All']);
     window.all.forEach(app => { if(app.stack) stacks.add(app.stack); });
 
+    finderSide.innerHTML = `<div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-2 mb-2 mt-2">Categories</div>`;
+    
     stacks.forEach(s => {
         const item = document.createElement('div');
-        item.className = 'px-3 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded cursor-pointer';
+        item.className = 'px-3 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded cursor-pointer truncate';
         item.textContent = s;
         item.onclick = () => filterFinder(s);
         finderSide.appendChild(item);
@@ -156,12 +212,12 @@ window.filterFinder = function(stack) {
     
     apps.forEach(app => {
         const el = document.createElement('div');
-        el.className = "flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-gray-800 cursor-pointer transition";
+        el.className = "flex flex-col items-center gap-2 p-3 rounded-lg hover:bg-gray-800 cursor-pointer transition select-none";
         el.innerHTML = `
-            <div class="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center text-white">
-                ${renderIconHtml(app.iconUrl, "text-xl")}
+            <div class="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center text-white overflow-hidden">
+                ${window.renderIconHtml(app.iconUrl, "text-xl")}
             </div>
-            <span class="text-xs text-gray-300 text-center truncate w-full">${esc(app.name)}</span>
+            <span class="text-xs text-gray-300 text-center truncate w-full">${window.esc(app.name)}</span>
         `;
         el.onclick = () => {
             WindowManager.openApp(app);
@@ -170,43 +226,51 @@ window.filterFinder = function(stack) {
         el.oncontextmenu = (e) => {
             e.preventDefault();
             e.stopPropagation();
-            if(window.showContextMenu) window.showContextMenu(e, app);
+            window.showContextMenu(e, app);
         };
         grid.appendChild(el);
     });
     
     list.appendChild(grid);
     const status = document.getElementById('finderStatus');
-    if(status) status.innerText = `${apps.length} items`;
+    if(status) status.innerText = `${apps.length} apps in ${stack}`;
 };
 
 // --- Context Menu Logic ---
 window.showContextMenu = function(e, app) {
-    const menu = document.getElementById('contextMenu');
-    if(!menu) return;
+    // Remove existing
+    window.hideContextMenu();
 
+    const menu = document.createElement('div');
+    menu.id = 'contextMenu';
+    menu.className = "fixed bg-[#2d2d2d] border border-gray-700 rounded-lg shadow-2xl py-1 z-[999999] min-w-[160px] animate-popIn flex flex-col";
+    
+    const onDesk = app.onDesktop;
+    
     menu.innerHTML = `
-        <div onclick="WindowManager.openApp(window.all.find(a=>a.id==='${app.id}'))" class="ctx-item flex items-center gap-2">
-            <span class="material-symbols-outlined text-sm text-gray-400">open_in_new</span> Open
+        <div onclick="WindowManager.openApp(window.all.find(a=>a.id==='${app.id}')); window.hideContextMenu()" class="px-4 py-2 hover:bg-blue-600 cursor-pointer text-xs text-gray-200 flex items-center gap-2">
+            <span class="material-symbols-outlined text-sm">open_in_new</span> Open
         </div>
-        <div onclick="if(window.Editor) window.Editor.open('${app.id}')" class="ctx-item flex items-center gap-2">
-            <span class="material-symbols-outlined text-sm text-gray-400">edit</span> Edit Source
+        <div onclick="window.toggleDesktop('${app.id}'); window.hideContextMenu()" class="px-4 py-2 hover:bg-blue-600 cursor-pointer text-xs text-gray-200 flex items-center gap-2">
+            <span class="material-symbols-outlined text-sm">${onDesk ? 'close' : 'add_to_queue'}</span> ${onDesk ? 'Remove from Desktop' : 'Add to Desktop'}
+        </div>
+        <div onclick="if(window.Editor) window.Editor.open('${app.id}'); window.hideContextMenu()" class="px-4 py-2 hover:bg-blue-600 cursor-pointer text-xs text-gray-200 flex items-center gap-2">
+            <span class="material-symbols-outlined text-sm">code</span> Edit Source
         </div>
         <div class="h-px bg-gray-700 my-1"></div>
-        <div onclick="window.deleteApp('${app.id}')" class="ctx-item flex items-center gap-2 text-red-400 hover:text-red-300">
+        <div onclick="window.deleteApp('${app.id}'); window.hideContextMenu()" class="px-4 py-2 hover:bg-red-900 cursor-pointer text-xs text-red-300 flex items-center gap-2">
             <span class="material-symbols-outlined text-sm">delete</span> Delete
         </div>
     `;
 
-    menu.style.display = 'flex';
-    menu.classList.remove('hidden');
+    document.body.appendChild(menu);
     
     let x = e.clientX;
     let y = e.clientY;
     
-    // Boundary check to keep menu on screen
-    if (x + 150 > window.innerWidth) x = window.innerWidth - 160;
-    if (y + 120 > window.innerHeight) y = window.innerHeight - 130;
+    // Boundary check
+    if (x + 160 > window.innerWidth) x = window.innerWidth - 170;
+    if (y + 200 > window.innerHeight) y = window.innerHeight - 210;
     
     menu.style.left = `${x}px`;
     menu.style.top = `${y}px`;
@@ -214,14 +278,25 @@ window.showContextMenu = function(e, app) {
 
 window.hideContextMenu = function() {
     const menu = document.getElementById('contextMenu');
-    if(menu) menu.classList.add('hidden');
+    if(menu) menu.remove();
+};
+
+// --- Operations ---
+
+window.toggleDesktop = async function(id) {
+    const app = window.all.find(a => a.id === id);
+    if(app) {
+        app.onDesktop = !app.onDesktop;
+        if(window.dbOp) await window.dbOp('put', app);
+        window.renderDesktopIcons();
+    }
 };
 
 window.deleteApp = async function(id) {
-    if(confirm("Are you sure you want to delete this app?")) {
+    if(confirm("Permanently delete this app?")) {
         try {
             await window.dbOp('delete', id);
-            if(window.notify) notify("App Deleted");
+            window.notify("App Deleted");
             
             window.all = window.all.filter(a => a.id !== id);
             window.renderDesktopIcons();
@@ -230,20 +305,93 @@ window.deleteApp = async function(id) {
             if(WindowManager.windows.has(id)) WindowManager.close(id);
         } catch(e) {
             console.error(e);
-            notify("Delete Failed", true);
+            window.notify("Delete Failed", true);
         }
     }
-    window.hideContextMenu();
 };
 
-function setupListeners() {
+// --- Settings Modal ---
+window.openSettingsModal = function() {
+    // Center logic
+    const w = 400;
+    const x = (window.innerWidth - w) / 2;
+    const y = 100;
+
+    const modal = document.createElement('div');
+    modal.className = "fixed bg-[#1e1e1e] border border-gray-600 rounded-lg shadow-2xl z-[9999] p-4 flex flex-col gap-4 animate-popIn";
+    modal.style.left = x + 'px';
+    modal.style.top = y + 'px';
+    modal.style.width = w + 'px';
+    
+    modal.innerHTML = `
+        <div class="flex justify-between items-center border-b border-gray-700 pb-2">
+            <h3 class="text-white font-bold">System Settings</h3>
+            <button onclick="this.parentElement.parentElement.remove()" class="text-gray-400 hover:text-white">✕</button>
+        </div>
+        
+        <div class="flex flex-col gap-2">
+            <label class="flex items-center justify-between text-gray-300 text-sm">
+                <span>Enable 3D Particles</span>
+                <input type="checkbox" id="set-3d" ${window.settings.use3DBackground && !window.settings.wallpaper ? 'checked' : ''} class="accent-blue-500">
+            </label>
+            <p class="text-[10px] text-gray-500">Disabling saves CPU usage.</p>
+        </div>
+
+        <div class="border-t border-gray-700 my-2"></div>
+
+        <div class="flex flex-col gap-2">
+            <h4 class="text-gray-300 text-sm">Custom Wallpaper</h4>
+            <input type="file" id="set-wall" accept="image/*" class="text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-gray-700 file:text-white">
+            <button onclick="clearWallpaper()" class="text-xs text-red-400 text-left hover:underline">Reset to Default</button>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+
+    // Listeners
+    modal.querySelector('#set-3d').onchange = (e) => {
+        window.settings.use3DBackground = e.target.checked;
+        window.settings.wallpaper = null; // Disable wallpaper if toggling 3d
+        saveSettings();
+    };
+
+    modal.querySelector('#set-wall').onchange = (e) => {
+        const file = e.target.files[0];
+        if(file) {
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                window.settings.wallpaper = evt.target.result;
+                window.settings.use3DBackground = false; // Disable 3D
+                saveSettings();
+                modal.remove(); // Close to show effect
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+};
+
+window.clearWallpaper = function() {
+    window.settings.wallpaper = null;
+    window.settings.use3DBackground = true;
+    saveSettings();
+};
+
+function setupGlobalListeners() {
+    // Close context menu on click anywhere else
+    document.addEventListener('click', (e) => {
+        if(!e.target.closest('#contextMenu')) {
+            window.hideContextMenu();
+        }
+    });
+
+    // Launcher toggler
     const btn = document.getElementById('createNewAppBtn');
     if(btn) btn.onclick = () => {
         WindowManager.toggleLauncher();
-        // SAFE CALL
         if(window.Editor && window.Editor.open) window.Editor.open();
     };
 
+    // Finder Search
     const search = document.getElementById('finderSearch');
     if(search) {
         search.oninput = (e) => {
@@ -257,8 +405,8 @@ function setupListeners() {
     }
 }
 
-// Background Animation (Three.js)
-window.initBackground = function() { 
+// --- 3D Background Implementation ---
+function initThreeJSBackground() { 
     if(window.bgAnimationPaused) return; 
     const cvs = document.getElementById('bg-canvas'); 
     if(!window.THREE || !cvs) return; 
@@ -297,4 +445,4 @@ window.initBackground = function() {
         cam.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
-};
+}
