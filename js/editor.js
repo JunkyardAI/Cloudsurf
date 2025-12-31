@@ -1,4 +1,4 @@
-// --- MODULE: EDITOR 7.2 (Finalized & Bound) ---
+// --- MODULE: EDITOR 7.5 (Deep Dive Refinement) ---
 
 window.Editor = {
     // State
@@ -113,6 +113,13 @@ window.Editor = {
         
         delete this.state.files[path];
         
+        // CRITICAL FIX: If we deleted the last file, reset the project to avoid "Dead Editor" state
+        if (Object.keys(this.state.files).length === 0) {
+            if(window.notify) window.notify("Project empty. Resetting to default.");
+            this.resetToEmpty();
+            return;
+        }
+        
         if (this.state.activeFilePath === path) {
             this.state.activeFilePath = null;
             if(window.editorCM) window.editorCM.setValue("");
@@ -158,6 +165,9 @@ window.Editor = {
         input.setAttribute('directory', '');
         input.setAttribute('multiple', '');
         input.style.display = 'none';
+        
+        // Reset value to ensure onchange fires even if same folder selected twice
+        input.value = ''; 
         
         input.onchange = (e) => this.handleInputImport(e);
         document.body.appendChild(input);
@@ -436,7 +446,15 @@ window.Editor = {
         };
         
         try {
-            if(window.dbPut) await window.dbPut(app);
+            // Electron Integration Bridge
+            if (window.electronAPI && window.electronAPI.saveProject) {
+                // If running in your future Electron wrapper
+                await window.electronAPI.saveProject(app);
+            } else if(window.dbPut) {
+                // Web Environment
+                await window.dbPut(app);
+            }
+            
             this.state.appId = app.id;
             this.state.hasUnsavedChanges = false;
             this.updateUnsavedIndicator();
@@ -661,13 +679,28 @@ window.Editor = {
         this.state.appId = crypto.randomUUID();
         this.state.iconData = null;
         this.updateIconPreview(null);
+        
+        // REFINED: Matches your preferred Electron/Modular folder structure
         this.state.files = {
-            'index.html': { content: '<!DOCTYPE html>\n<html>\n<head>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <h1>New Project</h1>\n  <script src="app.js"></script>\n</body>\n</html>', type: 'text' },
-            'style.css': { content: 'body { background: #111; color: white; font-family: sans-serif; }', type: 'text' },
-            'app.js': { content: 'console.log("Hello World");', type: 'text' }
+            'index.html': { 
+                content: '<!DOCTYPE html>\n<html>\n<head>\n  <link rel="stylesheet" href="styles/style.css">\n</head>\n<body>\n  <h1>New Project</h1>\n  <script src="js/app.js"></script>\n</body>\n</html>', 
+                type: 'text' 
+            },
+            'styles/style.css': { 
+                content: 'body { background: #111; color: white; font-family: sans-serif; }', 
+                type: 'text' 
+            },
+            'js/app.js': { 
+                content: 'console.log("Hello World");', 
+                type: 'text' 
+            }
         };
+        
         this.state.activeFilePath = 'index.html';
         this.state.expandedFolders.clear();
+        this.state.expandedFolders.add('styles');
+        this.state.expandedFolders.add('js');
+        
         this.setFieldValue('inName', "Untitled Project");
         this.setFieldValue('inStack', "Development");
         this.renderTree();
@@ -792,14 +825,16 @@ window.Editor = {
             }
         }
         
-        // Fix New File Button (+ icon in sidebar)
-        // Broadened selector to ensure we catch it in the header, not just the tree container
-        const newFileBtn = document.querySelector('#editor-app button[title="New File"]'); 
+        // Fix New File Button (+ icon in sidebar) with multiple fallbacks
+        const newFileBtn = document.querySelector('#editor-app button[title="New File"]') ||
+                           document.getElementById('btnNewFile') ||
+                           Array.from(document.querySelectorAll('#editor-app button')).find(b => b.innerText.trim() === 'note_add');
+
         if(newFileBtn) {
-             newFileBtn.addEventListener('click', (e) => { 
+             newFileBtn.onclick = (e) => { 
                  e.stopPropagation(); 
                  this.newFile(); 
-             });
+             };
         }
     },
     
