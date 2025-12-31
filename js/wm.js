@@ -1,4 +1,4 @@
-// --- MODULE: WINDOW MANAGER (v6.0 - Deep Link & Icon Support) ---
+// --- MODULE: WINDOW MANAGER (v6.1 - Robust Icons & Centering) ---
 
 const WIN_STATE_KEY = 'cloudstax_win_state';
 
@@ -11,54 +11,49 @@ window.WindowManager = {
     init: function() {
         window.addEventListener('mousemove', (e) => this.onDrag(e));
         window.addEventListener('mouseup', () => this.stopDrag());
-        // Handle window resize for centering
         window.addEventListener('resize', () => this.recenterWindows());
     },
 
-    // --- Window Spawning & State ---
+    // --- Window Spawning ---
 
     openApp: async function(app) {
         if (!app || !app.id) return;
 
-        // 1. Editor Special Handling
         if (app.type === 'editor' || app.id === 'editor') {
             if (window.Editor && window.Editor.open) {
-                // Pass a specific ID if we are "Editing Source" of an existing app
                 window.Editor.open(app.id !== 'editor' ? app.id : null);
             }
             this.focusWindow('editor-app');
             return;
         }
 
-        // 2. Focus if already open
         if (this.windows.has(app.id)) {
             this.focusWindow(app.id);
             return;
         }
 
-        // 3. Create Window
         this.zIndex++;
         const winId = app.id;
         const win = document.createElement('div');
         win.id = `win-${winId}`;
         win.className = 'window absolute flex flex-col bg-[#1e1e1e] border border-gray-700 rounded-lg shadow-2xl overflow-hidden animate-popIn';
         
-        // Smart Positioning
+        // Smart Positioning & Sizing
         const saved = this.getSavedState(app.id);
         if(saved) {
             win.style.width = saved.w; win.style.height = saved.h; win.style.left = saved.x; win.style.top = saved.y;
         } else {
-            // Center Calculation
-            const w = 800, h = 600;
-            const x = Math.max(0, (window.innerWidth - w) / 2) + (this.windows.size * 20);
-            const y = Math.max(0, (window.innerHeight - h) / 2) + (this.windows.size * 20);
+            // Default Center
+            const w = 900, h = 650;
+            // Ensure it doesn't spawn off-screen
+            const x = Math.max(20, (window.innerWidth - w) / 2) + (this.windows.size * 20);
+            const y = Math.max(20, (window.innerHeight - h) / 2) + (this.windows.size * 20);
             win.style.width = `${w}px`; win.style.height = `${h}px`;
             win.style.left = `${x}px`; win.style.top = `${y}px`;
         }
         
         win.style.zIndex = this.zIndex;
         
-        // Resolve Icon (Async)
         const iconHtml = await this.resolveAppIcon(app, "text-sm");
 
         win.innerHTML = `
@@ -73,11 +68,9 @@ window.WindowManager = {
                         ${iconHtml} ${window.esc(app.name)}
                     </span>
                 </div>
-                <div class="flex gap-2">
-                    <button onclick="document.getElementById('frame-${winId}').contentWindow.location.reload()" class="text-gray-500 hover:text-white p-1 rounded hover:bg-white/10" title="Refresh App">
-                        <span class="material-symbols-outlined text-[14px]">refresh</span>
-                    </button>
-                </div>
+                <button onclick="document.getElementById('frame-${winId}').contentWindow.location.reload()" class="text-gray-500 hover:text-white p-1 rounded hover:bg-white/10" title="Refresh App">
+                    <span class="material-symbols-outlined text-[14px]">refresh</span>
+                </button>
             </div>
             <div class="flex-1 bg-white relative">
                 <iframe id="frame-${winId}" class="w-full h-full border-0 bg-white" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"></iframe>
@@ -91,10 +84,10 @@ window.WindowManager = {
         this.windows.set(winId, win);
         if(!app.id.startsWith('preview-')) this.addToDock(app);
 
-        // 4. Launch Logic
+        // Launch Process
         try {
-            // Ensure we have the full app data (files might be missing in a shallow listing)
             let fullApp = app;
+            // Fetch content if lazy loaded
             if ((!app.files || Object.keys(app.files).length === 0) && window.dbOp) {
                 const dbApp = await window.dbOp('get', app.id);
                 if (dbApp) fullApp = dbApp;
@@ -104,7 +97,6 @@ window.WindowManager = {
             const frame = document.getElementById(`frame-${winId}`);
             const loader = document.getElementById(`loader-${winId}`);
             
-            // Render content
             requestAnimationFrame(() => {
                 if(frame && frame.contentDocument) {
                     frame.contentDocument.open();
@@ -124,7 +116,7 @@ window.WindowManager = {
         }
     },
 
-    // --- The Runtime Engine (Simulates Electron/Web Server) ---
+    // --- The Runtime Engine ---
 
     launchApp: async function(app) {
         if (app.url && (!app.files || Object.keys(app.files).length === 0)) {
@@ -134,7 +126,6 @@ window.WindowManager = {
         const files = app.files || {};
         const urlMap = {};
         
-        // 1. Blob Creation (Phase 1)
         for (const path in files) {
             const file = files[path];
             const mime = this.getMimeType(path);
@@ -146,41 +137,29 @@ window.WindowManager = {
                 blobUrl = URL.createObjectURL(new Blob([file.content], { type: mime }));
             }
             
-            // Normalize path for lookup
             urlMap[window.normalizePath(path)] = blobUrl;
         }
 
-        // 2. Entry Point Finding
         let indexContent = "";
         const entryPoints = ['index.html', 'main.html', 'app.html'];
         let indexPath = Object.keys(files).find(k => entryPoints.includes(k.toLowerCase().split('/').pop()));
         
         if (indexPath) indexContent = files[indexPath].content;
-        else if (app.html) indexContent = app.html; // Legacy support
+        else if (app.html) indexContent = app.html; 
         else indexContent = `<h1>${window.esc(app.name)}</h1><p>No index.html found</p>`;
 
-        // 3. Deep Linking / Relative Path Resolution (Phase 2)
-        // This regex aggressively finds href="", src="", url("") and replaces relative paths with Blob URLs
-        // It handles: ./style.css, style.css, /css/style.css, ../img/logo.png
-        
-        // We sort keys by length descending to prevent "style.css" replacing "my-style.css" incorrectly
+        // Deep Link Regex
         const paths = Object.keys(urlMap).sort((a,b) => b.length - a.length);
 
         paths.forEach(path => {
             const blobUrl = urlMap[path];
-            // Escape for regex
             const safePath = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            
-            // Matches: src="path", href='path', url(path)
-            // Group 1: prefix (src=", url()
-            // Group 3: path (captured)
-            // Group 5: suffix (", ')
+            // Regex to match src="path", url('path') etc.
             const regex = new RegExp(`((href|src|action)=["']|url\\(["']?)((\\./|/)?${safePath})(["']?|\\))`, 'g');
-            
             indexContent = indexContent.replace(regex, `$1${blobUrl}$5`);
         });
 
-        // 4. Bridge Injection (Console & Error Handling)
+        // Bridge
         const bridge = `
         <script>
         window.onerror = function(m,u,l){ window.parent.postMessage({type:'log',level:'error',message:m + ' (Line ' + l + ')'},'*'); };
@@ -199,27 +178,28 @@ window.WindowManager = {
         return indexContent;
     },
 
-    // --- Icon Resolution System ---
+    // --- Icon Resolution ---
 
     resolveAppIcon: async function(app, classes = "") {
-        // 1. Google Font Icon (Simple String)
+        // 1. Internal Base64 Data (New Standard)
+        if (app.iconData) {
+            return `<img src="${app.iconData}" class="${classes} object-contain select-none pointer-events-none">`;
+        }
+        
+        // 2. Google Font Icon (Legacy)
         if (!app.iconUrl) return `<span class="material-symbols-outlined ${classes}">grid_view</span>`;
         if (/^[a-z0-9_]+$/.test(app.iconUrl)) return `<span class="material-symbols-outlined ${classes}">${app.iconUrl}</span>`;
         
-        // 2. Internal File Reference (e.g., "assets/icon.png")
-        // We check if the app has a file matching the iconUrl
+        // 3. File in App Bundle (Legacy)
         let files = app.files;
         if (!files && window.dbOp) {
-            // Fetch if not loaded
             const dbApp = await window.dbOp('get', app.id);
             if (dbApp) files = dbApp.files;
         }
 
         if (files) {
-            // Try exact match, then normalize
             const cleanPath = window.normalizePath(app.iconUrl);
             const file = files[cleanPath] || files[app.iconUrl];
-            
             if (file) {
                 let url;
                 if (file.type === 'blob' || file.content instanceof Blob) {
@@ -231,7 +211,7 @@ window.WindowManager = {
             }
         }
 
-        // 3. External URL or Base64 (Fallback)
+        // 4. External URL (Fallback)
         return `<img src="${app.iconUrl}" class="${classes} object-contain select-none pointer-events-none" onerror="this.style.display='none'">`;
     },
 
@@ -255,7 +235,6 @@ window.WindowManager = {
             win.style.opacity = '';
             win.style.transform = '';
             if(win.dataset.maximized === 'true') {
-                 // Ensure maximized windows reset properly on focus if needed
                  win.style.top = '0'; win.style.left = '0';
             }
         }
@@ -276,7 +255,6 @@ window.WindowManager = {
         if (!win) return;
         
         if (win.dataset.maximized === 'true') {
-            // Restore
             win.style.top = win.dataset.prevTop;
             win.style.left = win.dataset.prevLeft;
             win.style.width = win.dataset.prevWidth;
@@ -284,7 +262,6 @@ window.WindowManager = {
             win.dataset.maximized = 'false';
             win.style.borderRadius = '0.5rem';
         } else {
-            // Maximize
             win.dataset.prevTop = win.style.top;
             win.dataset.prevLeft = win.style.left;
             win.dataset.prevWidth = win.style.width;
@@ -301,8 +278,6 @@ window.WindowManager = {
     recenterWindows: function() {
         // Optional: logic to ensure windows stay on screen during resize
     },
-
-    // --- Dock Logic ---
 
     addToDock: async function(app) {
         const dock = document.getElementById('dock-apps');
@@ -331,6 +306,8 @@ window.WindowManager = {
     },
 
     removeFromDock: function(id) {
+        // System apps persist in dock
+        if(['finder', 'editor', 'settings'].includes(id)) return;
         const el = document.getElementById(`dock-icon-${id}`);
         if (el) el.remove();
     },
@@ -363,7 +340,6 @@ window.WindowManager = {
         } catch {} 
     },
 
-    // --- Dragging ---
     startDrag: function(e, id) {
         if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
         const win = document.getElementById(id);
@@ -375,7 +351,6 @@ window.WindowManager = {
             x: e.clientX - win.offsetLeft,
             y: e.clientY - win.offsetTop
         };
-        // Disable iframes to prevent mouse trapping
         document.querySelectorAll('iframe').forEach(f => f.style.pointerEvents = 'none');
     },
 
