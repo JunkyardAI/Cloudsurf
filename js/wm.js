@@ -1,4 +1,4 @@
-// --- MODULE: WINDOW MANAGER (v7.0 - Deep Link & Strict Mode) ---
+// --- MODULE: WINDOW MANAGER (v7.1 - Launch Guard & Strict Mode) ---
 
 const WIN_STATE_KEY = 'cloudstax_win_state';
 
@@ -20,7 +20,17 @@ window.WindowManager = {
     openApp: async function(app) {
         if (!app || !app.id) return;
 
-        // 1. Modal Hierarchy Check
+        // [RULE] Launch Guard: Block user apps in Edit Mode
+        // Only the Editor is allowed to run when systemMode is 'edit'
+        if (window.systemMode === 'edit') {
+            const isEditor = app.id === 'editor' || app.type === 'editor';
+            if (!isEditor) {
+                if(window.notify) window.notify("⚠️ Switch to RUNNER MODE to launch apps", true);
+                return; // STOP: Block launch
+            }
+        }
+
+        // [RULE] Modal Hierarchy Check
         // If a system modal is open, prevent opening new windows behind it
         if (window.isModalOpen && window.isModalOpen()) {
             const modal = document.querySelector('.active-modal');
@@ -31,7 +41,7 @@ window.WindowManager = {
             return;
         }
 
-        // 2. Strict Mode Check for Editor
+        // Special: Editor Handling
         if (app.type === 'editor' || app.id === 'editor') {
             if (window.systemMode === 'runner') {
                 if(window.notify) window.notify("Restricted: Switch to Edit Mode", true);
